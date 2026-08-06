@@ -109,17 +109,18 @@ impl MarkdownPreview {
 
         let scroll_output = scroll_area.show(ui, |ui| {
             let available_w = ui.available_width();
-            let min_padding = 10.0;
+            let min_padding = 16.0;
             let pct = preview_max_width.clamp(20.0, 100.0);
-            let content_w = available_w * (pct / 100.0);
             let side_padding = if pct < 100.0 {
-                ((available_w - content_w) / 2.0).max(min_padding)
+                let target_w = available_w * (pct / 100.0);
+                ((available_w - target_w) / 2.0).max(min_padding)
             } else {
                 min_padding
             };
+            let content_w = (available_w - side_padding * 2.0).max(10.0);
 
             egui::Frame::none()
-                .inner_margin(egui::Margin::symmetric(side_padding, 10.0))
+                .inner_margin(egui::Margin::symmetric(side_padding, 16.0))
                 .show(ui, |ui| {
                     ui.set_max_width(content_w);
                     let mut style = ui.style().as_ref().clone();

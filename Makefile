@@ -1,10 +1,23 @@
-.PHONY: default build release check run run-release test clean fmt clippy docker-build docker-export generate-icons generate-logos generate-assets package-deb package-rpm
+.PHONY: default help build build-crates build-workspace release check run run-release test clean fmt clippy docker-build docker-export update-version generate-icons generate-logos generate-assets package-deb package-rpm
 
-default: build
+default: help
+
+# Display all available commands in the Makefile
+help:
+	@echo "Available commands in Makefile:"
+	@awk '/^# /{comment=$$0; next} /^[a-zA-Z_-]+:/ {if (comment != "") {gsub(/^# /, "", comment); split($$1, a, ":"); printf "  \033[36m%-22s\033[0m %s\n", a[1], comment; comment=""}}' $(MAKEFILE_LIST)
 
 # Fast build (debug profile)
 build:
 	cargo build
+
+# Build egui_commonmark crate only (faster testing during crate edits)
+build-crates:
+	cargo build --manifest-path crates/egui_commonmark/Cargo.toml
+
+# Build all workspace packages (application and all crates)
+build-workspace:
+	cargo build --workspace
 
 # Slow build (fully optimized release profile)
 release:
@@ -76,6 +89,3 @@ package-deb:
 # Package the application as a .rpm package
 package-rpm:
 	@./scripts/package_rpm.sh
-
-hello:
-	echo "hello"

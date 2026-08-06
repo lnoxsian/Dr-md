@@ -83,7 +83,7 @@ pub fn code_block<'t>(
 ) {
     ui.set_max_width(max_width);
     let effective_width = max_width.min(ui.available_width());
-    let mut text = text.strip_suffix('\n').unwrap_or(text);
+    let mut text = text.trim_end_matches(['\r', '\n']);
 
     // To manually add background color to the code block, we imitate what
     // TextEdit does internally
@@ -99,15 +99,31 @@ pub fn code_block<'t>(
         .desired_rows(1)
         .show(ui);
 
-    // Background color + frame (This is lost when TextEdit it not editable)
+    // Background color + frame (This is lost when TextEdit is not editable)
     let frame_rect = output.response.rect;
+    let is_hovered = output.response.hovered() || ui.rect_contains_pointer(frame_rect);
+
+    let (bg_color, stroke) = if is_hovered {
+        let hover_stroke = if ui.visuals().widgets.hovered.bg_stroke.width > 0.0 {
+            ui.visuals().widgets.hovered.bg_stroke
+        } else {
+            egui::Stroke::new(1.0_f32, ui.visuals().widgets.hovered.fg_stroke.color)
+        };
+        (ui.visuals().extreme_bg_color, hover_stroke)
+    } else {
+        (
+            ui.visuals().extreme_bg_color,
+            ui.visuals().widgets.noninteractive.bg_stroke,
+        )
+    };
+
     ui.painter().set(
         where_to_put_background,
         epaint::RectShape::new(
             frame_rect,
             ui.style().noninteractive().rounding,
-            ui.visuals().extreme_bg_color,
-            ui.visuals().widgets.noninteractive.bg_stroke,
+            bg_color,
+            stroke,
         ),
     );
 
@@ -130,15 +146,15 @@ pub fn code_block<'t>(
     let button_width = (text_size.x + spacing.button_padding.x * 2.0).max(30.0);
     let button_height = (text_size.y + spacing.button_padding.y * 2.0).max(16.0);
 
-    let top_padding = 5.0;
+    let bottom_padding = 5.0;
     let position_y = if frame_rect.height() < 40.0 {
         frame_rect.top() + (frame_rect.height() - button_height) / 2.0
     } else {
-        frame_rect.top() + top_padding
+        frame_rect.bottom() - button_height - bottom_padding
     };
 
     let position = egui::pos2(
-        frame_rect.right_top().x - button_width - 5.0,
+        frame_rect.right_bottom().x - button_width - 5.0,
         position_y,
     );
 

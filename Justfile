@@ -1,8 +1,20 @@
-default: build
+default: help
+
+# Display all available commands in the Justfile
+help:
+    @just --list
 
 # Fast build (debug profile)
 build:
     cargo build
+
+# Build egui_commonmark crate only (faster testing during crate edits)
+build-crates:
+    cargo build --manifest-path crates/egui_commonmark/Cargo.toml
+
+# Build all workspace packages (application and all crates)
+build-workspace:
+    cargo build --workspace
 
 # Fast release build non optimized
 release:
@@ -20,6 +32,7 @@ check:
 run:
     cargo run
 
+# Run in release mode
 run-release:
     cargo run --release
 
@@ -79,4 +92,3 @@ package-deb:
 # Package the application as a .rpm package
 package-rpm:
     @./scripts/package_rpm.sh
-

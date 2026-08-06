@@ -681,7 +681,10 @@ impl FencedCodeBlock {
         ui.scope(|ui| {
             Self::pre_syntax_highlighting(cache, options, ui);
 
+            #[cfg(feature = "better_syntax_highlighting")]
             let curr_theme_name = options.curr_theme(ui);
+            #[cfg(not(feature = "better_syntax_highlighting"))]
+            let curr_theme_name = "";
             let dark_mode = ui.visuals().dark_mode;
             let font_size = ui.style().text_styles.get(&TextStyle::Monospace).map_or(14.0, |d| d.size);
 

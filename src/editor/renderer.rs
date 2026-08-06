@@ -563,52 +563,83 @@ impl EditorRenderer {
                                             ));
                                         }
 
-                                    if !enter_between_pairs && !stepped_over {
-                                        // 2. AUTOCLOSE OPENING BRACKETS
-                                        let mut autoclose_char = None;
-                                        match typed_char {
-                                            '(' => autoclose_char = Some(')'),
-                                            '[' => autoclose_char = Some(']'),
-                                            '{' => autoclose_char = Some('}'),
-                                            '"' => autoclose_char = Some('"'),
-                                            '\'' => autoclose_char = Some('\''),
-                                            '`' => {
-                                                if prev_idx >= 2
-                                                    && new_chars[prev_idx - 1] == '`'
-                                                    && new_chars[prev_idx - 2] == '`'
-                                                {
-                                                    let mut final_text = String::new();
-                                                    final_text.push_str(
-                                                        &self
-                                                            .content_buffer
-                                                            .chars()
-                                                            .take(current_idx)
-                                                            .collect::<String>(),
-                                                    );
-                                                    final_text.push_str("```");
-                                                    final_text.push_str(
-                                                        &self
-                                                            .content_buffer
-                                                            .chars()
-                                                            .skip(current_idx)
-                                                            .collect::<String>(),
-                                                    );
+                                     if !enter_between_pairs && !stepped_over {
+                                         // 2. AUTOCLOSE OPENING BRACKETS & QUOTES
+                                         let next_char = new_chars.get(current_idx).copied();
+                                         let prev_char = if prev_idx > 0 {
+                                             new_chars.get(prev_idx - 1).copied()
+                                         } else {
+                                             None
+                                         };
 
-                                                    self.content_buffer = final_text;
-                                                    text_changed = true;
+                                         let is_before_word =
+                                             next_char.map_or(false, |c| c.is_alphanumeric() || c == '_');
+                                         let is_after_word =
+                                             prev_char.map_or(false, |c| c.is_alphanumeric() || c == '_');
 
-                                                    let ccursor =
-                                                        egui::text::CCursor::new(current_idx);
-                                                    state.cursor.set_char_range(Some(
-                                                        egui::text::CCursorRange::two(
-                                                            ccursor, ccursor,
-                                                        ),
-                                                    ));
-                                                } else {
-                                                    autoclose_char = Some('`');
-                                                }
-                                            }
-                                            '*' => {
+                                         let mut autoclose_char = None;
+                                         match typed_char {
+                                             '(' => if !is_before_word { autoclose_char = Some(')') },
+                                             '[' => if !is_before_word { autoclose_char = Some(']') },
+                                             '{' => if !is_before_word { autoclose_char = Some('}') },
+                                             '"' => {
+                                                 if !is_before_word && !is_after_word {
+                                                     autoclose_char = Some('"');
+                                                 }
+                                             }
+                                             '\'' => {
+                                                 // Don't auto-close single quote if after a word (e.g. apostrophe in don't)
+                                                 if !is_before_word && !is_after_word {
+                                                     autoclose_char = Some('\'');
+                                                 }
+                                             }
+                                             '`' => {
+                                                 if prev_idx >= 2
+                                                     && new_chars[prev_idx - 1] == '`'
+                                                     && new_chars[prev_idx - 2] == '`'
+                                                 {
+                                                     let remaining_on_line: String = new_chars[current_idx..]
+                                                         .iter()
+                                                         .take_while(|&&c| c != '\n')
+                                                         .collect();
+
+                                                     let is_line_rest_empty = remaining_on_line.trim().is_empty();
+                                                     let already_has_closing_fences = remaining_on_line.trim_start().starts_with("```");
+
+                                                     if is_line_rest_empty && !already_has_closing_fences {
+                                                         let mut final_text = String::new();
+                                                         final_text.push_str(
+                                                             &self
+                                                                 .content_buffer
+                                                                 .chars()
+                                                                 .take(current_idx)
+                                                                 .collect::<String>(),
+                                                         );
+                                                         final_text.push_str("```");
+                                                         final_text.push_str(
+                                                             &self
+                                                                 .content_buffer
+                                                                 .chars()
+                                                                 .skip(current_idx)
+                                                                 .collect::<String>(),
+                                                         );
+
+                                                         self.content_buffer = final_text;
+                                                         text_changed = true;
+
+                                                         let ccursor =
+                                                             egui::text::CCursor::new(current_idx);
+                                                         state.cursor.set_char_range(Some(
+                                                             egui::text::CCursorRange::two(
+                                                                 ccursor, ccursor,
+                                                             ),
+                                                         ));
+                                                     }
+                                                 } else if !is_before_word && !is_after_word {
+                                                     autoclose_char = Some('`');
+                                                 }
+                                             }
+                                             '*' => {
                                                 if prev_idx >= 1 && new_chars[prev_idx - 1] == '*' {
                                                     let mut final_text = String::new();
                                                     final_text.push_str(
@@ -1920,6 +1951,72 @@ mod tests {
                 input_pair
             );
         }
+    }
+
+    #[test]
+    fn test_autoclosing_before_word_suppression() {
+        let mut renderer = EditorRenderer::new();
+        // User typed '`' when cursor was right before 'b' in "bash"
+        renderer.previous_text = "bash".to_string();
+        renderer.content_buffer = "`bash".to_string();
+        let prev_cc = egui::text::CCursor::new(0);
+        renderer.previous_cursor = Some(egui::text::CCursorRange::two(prev_cc, prev_cc));
+
+        let ctx = egui::Context::default();
+        let id = egui::Id::new("test_editor");
+        let mut state = egui::widgets::text_edit::TextEditState::default();
+        let curr_cc = egui::text::CCursor::new(1);
+        state
+            .cursor
+            .set_char_range(Some(egui::text::CCursorRange::two(curr_cc, curr_cc)));
+
+        let changed = renderer.process_autoclosing(&ctx, id, state, true);
+        assert!(!changed, "Should not insert closing backtick when typing before a word");
+        assert_eq!(renderer.content_buffer, "`bash");
+    }
+
+    #[test]
+    fn test_autoclosing_apostrophe_suppression() {
+        let mut renderer = EditorRenderer::new();
+        // User typed '\'' after 'n' in "don"
+        renderer.previous_text = "don".to_string();
+        renderer.content_buffer = "don'".to_string();
+        let prev_cc = egui::text::CCursor::new(3);
+        renderer.previous_cursor = Some(egui::text::CCursorRange::two(prev_cc, prev_cc));
+
+        let ctx = egui::Context::default();
+        let id = egui::Id::new("test_editor");
+        let mut state = egui::widgets::text_edit::TextEditState::default();
+        let curr_cc = egui::text::CCursor::new(4);
+        state
+            .cursor
+            .set_char_range(Some(egui::text::CCursorRange::two(curr_cc, curr_cc)));
+
+        let changed = renderer.process_autoclosing(&ctx, id, state, true);
+        assert!(!changed, "Should not auto-close single quote when typing after a word (apostrophe)");
+        assert_eq!(renderer.content_buffer, "don'");
+    }
+
+    #[test]
+    fn test_autoclosing_paste_suppression() {
+        let mut renderer = EditorRenderer::new();
+        // User pasted "[example]" into an empty editor
+        renderer.previous_text = "".to_string();
+        renderer.content_buffer = "[example]".to_string();
+        let prev_cc = egui::text::CCursor::new(0);
+        renderer.previous_cursor = Some(egui::text::CCursorRange::two(prev_cc, prev_cc));
+
+        let ctx = egui::Context::default();
+        let id = egui::Id::new("test_editor");
+        let mut state = egui::widgets::text_edit::TextEditState::default();
+        let curr_cc = egui::text::CCursor::new(9);
+        state
+            .cursor
+            .set_char_range(Some(egui::text::CCursorRange::two(curr_cc, curr_cc)));
+
+        let changed = renderer.process_autoclosing(&ctx, id, state, true);
+        assert!(!changed, "Pasting text should not trigger autoclosing");
+        assert_eq!(renderer.content_buffer, "[example]");
     }
 
     #[test]

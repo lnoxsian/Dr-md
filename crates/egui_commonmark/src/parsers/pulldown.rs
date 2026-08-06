@@ -432,6 +432,9 @@ fn parse_math_segments(input: &str) -> Vec<MathSegment<'_>> {
                 pos += 1;
                 let mut found_close = false;
                 while pos < len {
+                    if chars[pos] == '\n' {
+                        break;
+                    }
                     if chars[pos] == '$' && pos > 0 && !chars[pos - 1].is_whitespace() {
                         found_close = true;
                         break;
@@ -1157,6 +1160,13 @@ mod tests {
     }
 
 
+
+    #[test]
+    fn test_multiline_inline_math_rejection() {
+        let input = "echo $USER\n```bash\nflatpak install flathub com.github.tchx84.Flatseal\n```\necho $USER";
+        let preprocessed = preprocess_math_blocks(input);
+        assert_eq!(preprocessed, input);
+    }
 
     #[test]
     fn test_benchmark_events() {
