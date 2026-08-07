@@ -20,7 +20,7 @@ impl ThemeAccent {
     pub fn color(&self) -> egui::Color32 {
         match self {
             Self::Blue => egui::Color32::from_rgb(29, 78, 216),
-            Self::Purple => egui::Color32::from_rgb(109, 40, 200),
+            Self::Purple => egui::Color32::from_rgb(162, 122, 228),
             Self::Orange => egui::Color32::from_rgb(194, 65, 12),
             Self::Red => egui::Color32::from_rgb(185, 28, 28),
             Self::Green => egui::Color32::from_rgb(21, 128, 61),

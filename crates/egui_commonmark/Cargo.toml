@@ -58,6 +58,14 @@ default-features = false
 version = "0.2"
 optional = true
 
+[dependencies.arboard]
+version = "3.6.1"
+
+[dependencies.image]
+version = "0.24"
+default-features = false
+features = ["png", "webp", "jpeg", "gif", "bmp", "tiff"]
+
 [dependencies.egui]
 version = "0.27"
 

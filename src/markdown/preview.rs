@@ -49,9 +49,11 @@ impl MarkdownPreview {
         font_size: f32,
         theme: &str,
         mirror_mode: bool,
-        show_search: bool,
+        is_preview_mode: bool,
         preview_max_width: f32,
     ) {
+
+
         if let Some((uri, bytes)) = self.cache.zoomed_image_request.take() {
             self.active_zoom = Some(ZoomModalState {
                 uri,
@@ -61,7 +63,7 @@ impl MarkdownPreview {
             });
         }
 
-        if show_search {
+        if is_preview_mode {
             editor_renderer.show_find_panel(ui, editor, false);
         }
 
@@ -124,6 +126,7 @@ impl MarkdownPreview {
                 .show(ui, |ui| {
                     ui.set_max_width(content_w);
                     let mut style = ui.style().as_ref().clone();
+                    style.interaction.selectable_labels = true;
                     let body_font = egui::FontId::new(font_size, egui::FontFamily::Proportional);
                     let heading_font =
                         egui::FontId::new(font_size * 1.4, egui::FontFamily::Proportional);
@@ -287,6 +290,8 @@ impl MarkdownPreview {
             }
         }
 
+
+
         if let Some(zoom_state) = &mut self.active_zoom {
             let mut close = false;
             let pane_rect = ui.max_rect();
@@ -357,6 +362,8 @@ impl MarkdownPreview {
             }
         }
     }
+
+
 }
 
 #[cfg(test)]
