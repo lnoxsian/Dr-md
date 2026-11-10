@@ -1,13 +1,66 @@
 use crate::app::commands;
 use crate::app::state::{AppState, ViewMode};
 
+/// Renders a uniform menu item with left-aligned label and right-aligned shortcut text.
+fn menu_item(
+    ui: &mut egui::Ui,
+    label: &str,
+    shortcut: impl Into<egui::WidgetText>,
+) -> egui::Response {
+    let button = egui::Button::new(label)
+        .shortcut_text(shortcut)
+        .wrap(false);
+    ui.add(button)
+}
+
+/// Renders an enabled/disabled uniform menu item.
+fn menu_item_enabled(
+    ui: &mut egui::Ui,
+    enabled: bool,
+    label: &str,
+    shortcut: impl Into<egui::WidgetText>,
+) -> egui::Response {
+    let button = egui::Button::new(label)
+        .shortcut_text(shortcut)
+        .wrap(false);
+    ui.add_enabled(enabled, button)
+}
+
+/// Renders a uniform menu checkbox item with a native egui checkbox on the left and right-aligned shortcut.
+fn menu_checkbox(
+    ui: &mut egui::Ui,
+    checked: &mut bool,
+    label: &str,
+    shortcut: impl Into<egui::WidgetText>,
+) -> egui::Response {
+    let shortcut_widget = shortcut.into().color(ui.visuals().weak_text_color());
+    ui.horizontal(|ui| {
+        let mut response = ui.checkbox(checked, label);
+        if !shortcut_widget.is_empty() {
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let shortcut_resp = ui.add(
+                    egui::Label::new(shortcut_widget)
+                        .sense(egui::Sense::click()),
+                );
+                if shortcut_resp.clicked() {
+                    *checked = !*checked;
+                    response.mark_changed();
+                }
+            });
+        }
+        response
+    })
+    .inner
+}
+
 pub fn render_menu_bar(ctx: &egui::Context, state: &mut AppState) {
     if !state.focus_mode {
         egui::TopBottomPanel::top("top_bar").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
                 ui.menu_button("File", |ui| {
+                    ui.set_min_width(240.0);
                     ui.style_mut().wrap = Some(false);
-                    if ui.button("New Note (Ctrl+N)").clicked() {
+                    if menu_item(ui, "New Note", "Ctrl+N").clicked() {
                         if let Some(ref root) = state.vault.root_path {
                             state.explorer_visible = true;
                             let target_dir = state
@@ -23,7 +76,7 @@ pub fn render_menu_bar(ctx: &egui::Context, state: &mut AppState) {
                         }
                         ui.close_menu();
                     }
-                    if ui.button("New Folder (Ctrl+Shift+N)").clicked() {
+                    if menu_item(ui, "New Folder", "Ctrl+Shift+N").clicked() {
                         if let Some(ref root) = state.vault.root_path {
                             state.explorer_visible = true;
                             let target_dir = state
@@ -39,25 +92,25 @@ pub fn render_menu_bar(ctx: &egui::Context, state: &mut AppState) {
                         }
                         ui.close_menu();
                     }
-                    if ui.button("Open Folder (Ctrl+O)").clicked() {
+                    if menu_item(ui, "Open Folder", "Ctrl+O").clicked() {
                         if let Some(path) = rfd::FileDialog::new().pick_folder() {
                             commands::execute_open_folder(state, path);
                         }
                         ui.close_menu();
                     }
                     ui.separator();
-                    if ui.button("Save (Ctrl+S)").clicked() {
+                    if menu_item(ui, "Save", "Ctrl+S").clicked() {
                         commands::execute_save(state);
                         ui.close_menu();
                     }
-                    if ui.button("Save As (Ctrl+Shift+S)").clicked() {
+                    if menu_item(ui, "Save As", "Ctrl+Shift+S").clicked() {
                         if let Some(path) = rfd::FileDialog::new().save_file() {
                             commands::execute_save_as(state, path);
                         }
                         ui.close_menu();
                     }
                     ui.separator();
-                    if ui.button("Close Note (Ctrl+W)").clicked() {
+                    if menu_item(ui, "Close Note", "Ctrl+W").clicked() {
                         if let Some(idx) = state.active_tab_index {
                             state.close_tab(idx);
                         }
@@ -66,11 +119,12 @@ pub fn render_menu_bar(ctx: &egui::Context, state: &mut AppState) {
                 });
 
                 ui.menu_button("Edit", |ui| {
+                    ui.set_min_width(240.0);
                     ui.style_mut().wrap = Some(false);
                     let has_active_tab = state.active_tab().is_some();
                     ui.set_enabled(has_active_tab);
 
-                    if ui.button("Cut (Ctrl+X)").clicked() {
+                    if menu_item(ui, "Cut", "Ctrl+X").clicked() {
                         let id = state.editor_id();
                         if let Some(mut text_state) =
                             egui::widgets::text_edit::TextEditState::load(ctx, id)
@@ -105,7 +159,7 @@ pub fn render_menu_bar(ctx: &egui::Context, state: &mut AppState) {
                             }
                         ui.close_menu();
                     }
-                    if ui.button("Copy (Ctrl+C)").clicked() {
+                    if menu_item(ui, "Copy", "Ctrl+C").clicked() {
                         let id = state.editor_id();
                         if let Some(text_state) =
                             egui::widgets::text_edit::TextEditState::load(ctx, id)
@@ -122,7 +176,7 @@ pub fn render_menu_bar(ctx: &egui::Context, state: &mut AppState) {
                             }
                         ui.close_menu();
                     }
-                    if ui.button("Paste (Ctrl+V)").clicked() {
+                    if menu_item(ui, "Paste", "Ctrl+V").clicked() {
                         if let Ok(mut clipboard) = arboard::Clipboard::new() {
                             let paste_text = clipboard.get_text().unwrap_or_default();
                             if !paste_text.is_empty() {
@@ -165,21 +219,21 @@ pub fn render_menu_bar(ctx: &egui::Context, state: &mut AppState) {
                         ui.close_menu();
                     }
                     ui.separator();
-                    if ui.button("Undo (Ctrl+Z)").clicked() {
+                    if menu_item(ui, "Undo", "Ctrl+Z").clicked() {
                         state.sync_cursor_from_egui(ctx);
                         if let Some(tab) = state.active_tab_mut() {
                             tab.editor.undo();
                         }
                         ui.close_menu();
                     }
-                    if ui.button("Redo (Ctrl+Shift+Z)").clicked() {
+                    if menu_item(ui, "Redo", "Ctrl+Shift+Z").clicked() {
                         state.sync_cursor_from_egui(ctx);
                         if let Some(tab) = state.active_tab_mut() {
                             tab.editor.redo();
                         }
                         ui.close_menu();
                     }
-                    if ui.button("Select All (Ctrl+A)").clicked() {
+                    if menu_item(ui, "Select All", "Ctrl+A").clicked() {
                         state.sync_cursor_from_egui(ctx);
                         let id = state.editor_id();
                         if let Some(mut text_state) =
@@ -196,7 +250,7 @@ pub fn render_menu_bar(ctx: &egui::Context, state: &mut AppState) {
                         ui.close_menu();
                     }
                     ui.separator();
-                    if ui.button("Find (Ctrl+F)").clicked() {
+                    if menu_item(ui, "Find", "Ctrl+F").clicked() {
                         state.sync_cursor_from_egui(ctx);
                         if let Some(tab) = state.active_tab_mut() {
                             tab.editor_renderer.find_visible = true;
@@ -207,28 +261,28 @@ pub fn render_menu_bar(ctx: &egui::Context, state: &mut AppState) {
                     }
                     ui.separator();
                     // Formatting
-                    if ui.button("Bold (Ctrl+B)").clicked() {
+                    if menu_item(ui, "Bold", "Ctrl+B").clicked() {
                         state.sync_cursor_from_egui(ctx);
                         if let Some(tab) = state.active_tab_mut() {
                             tab.editor.format_selection("bold");
                         }
                         ui.close_menu();
                     }
-                    if ui.button("Italic (Ctrl+I)").clicked() {
+                    if menu_item(ui, "Italic", "Ctrl+I").clicked() {
                         state.sync_cursor_from_egui(ctx);
                         if let Some(tab) = state.active_tab_mut() {
                             tab.editor.format_selection("italic");
                         }
                         ui.close_menu();
                     }
-                    if ui.button("Link (Ctrl+K)").clicked() {
+                    if menu_item(ui, "Link", "Ctrl+K").clicked() {
                         state.sync_cursor_from_egui(ctx);
                         if let Some(tab) = state.active_tab_mut() {
                             tab.editor.format_selection("link");
                         }
                         ui.close_menu();
                     }
-                    if ui.button("Comment (Ctrl+/)").clicked() {
+                    if menu_item(ui, "Comment", "Ctrl+/").clicked() {
                         state.sync_cursor_from_egui(ctx);
                         if let Some(tab) = state.active_tab_mut() {
                             tab.editor.format_selection("comment");
@@ -236,21 +290,21 @@ pub fn render_menu_bar(ctx: &egui::Context, state: &mut AppState) {
                         ui.close_menu();
                     }
                     ui.separator();
-                    if ui.button("Code Block (Ctrl+Shift+C)").clicked() {
+                    if menu_item(ui, "Code Block", "Ctrl+Shift+C").clicked() {
                         state.sync_cursor_from_egui(ctx);
                         if let Some(tab) = state.active_tab_mut() {
                             tab.editor.format_selection("code");
                         }
                         ui.close_menu();
                     }
-                    if ui.button("Checkbox (Ctrl+L)").clicked() {
+                    if menu_item(ui, "Checkbox", "Ctrl+L").clicked() {
                         state.sync_cursor_from_egui(ctx);
                         if let Some(tab) = state.active_tab_mut() {
                             tab.editor.format_selection("checkbox");
                         }
                         ui.close_menu();
                     }
-                    if ui.button("Table (Ctrl+Shift+T)").clicked() {
+                    if menu_item(ui, "Table", "Ctrl+Shift+T").clicked() {
                         state.insert_table_dialog_open = true;
                         state.insert_table_dialog_pos = state
                             .active_tab()
@@ -258,21 +312,21 @@ pub fn render_menu_bar(ctx: &egui::Context, state: &mut AppState) {
                             .or_else(|| ctx.input(|i| i.pointer.latest_pos()));
                         ui.close_menu();
                     }
-                    if ui.button("Numbered List").clicked() {
+                    if menu_item(ui, "Numbered List", "").clicked() {
                         state.sync_cursor_from_egui(ctx);
                         if let Some(tab) = state.active_tab_mut() {
                             tab.editor.format_selection("numbered_list");
                         }
                         ui.close_menu();
                     }
-                    if ui.button("Bulleted List").clicked() {
+                    if menu_item(ui, "Bulleted List", "").clicked() {
                         state.sync_cursor_from_egui(ctx);
                         if let Some(tab) = state.active_tab_mut() {
                             tab.editor.format_selection("bulleted_list");
                         }
                         ui.close_menu();
                     }
-                    if ui.button("Blockquote").clicked() {
+                    if menu_item(ui, "Blockquote", "").clicked() {
                         state.sync_cursor_from_egui(ctx);
                         if let Some(tab) = state.active_tab_mut() {
                             tab.editor.format_selection("indent");
@@ -282,82 +336,54 @@ pub fn render_menu_bar(ctx: &egui::Context, state: &mut AppState) {
                 });
 
                 ui.menu_button("View", |ui| {
+                    ui.set_min_width(240.0);
                     ui.style_mut().wrap = Some(false);
                     let has_active_tab = state.active_tab().is_some();
                     let current_view_mode = state.active_tab().map(|t| t.view_mode);
 
-                    let is_editor = current_view_mode == Some(ViewMode::Editor);
-                    if ui
-                        .add_enabled(
-                            has_active_tab,
-                            egui::Button::new(if is_editor { "✔ Editor (Ctrl+1)" } else { "  Editor (Ctrl+1)" }),
-                        )
-                        .clicked()
-                    {
-                        if let Some(tab) = state.active_tab_mut() {
-                            tab.view_mode = ViewMode::Editor;
-                            state.sync_session_state();
+                    ui.add_enabled_ui(has_active_tab, |ui| {
+                        let mut is_split = current_view_mode == Some(ViewMode::Split);
+                        if menu_checkbox(ui, &mut is_split, "Split", "Ctrl+1").changed() {
+                            if let Some(tab) = state.active_tab_mut() {
+                                tab.view_mode = if is_split {
+                                    ViewMode::Split
+                                } else {
+                                    ViewMode::Preview
+                                };
+                                state.sync_session_state();
+                            }
                         }
-                        ui.close_menu();
-                    }
-                    let is_preview = current_view_mode == Some(ViewMode::Preview);
-                    if ui
-                        .add_enabled(
-                            has_active_tab,
-                            egui::Button::new(if is_preview { "✔ Preview (Ctrl+2)" } else { "  Preview (Ctrl+2)" }),
-                        )
-                        .clicked()
-                    {
-                        if let Some(tab) = state.active_tab_mut() {
-                            tab.view_mode = ViewMode::Preview;
-                            state.sync_session_state();
+
+                        let mut is_preview = current_view_mode == Some(ViewMode::Preview);
+                        if menu_checkbox(ui, &mut is_preview, "Preview", "Ctrl+2").changed() {
+                            if let Some(tab) = state.active_tab_mut() {
+                                tab.view_mode = if is_preview {
+                                    ViewMode::Preview
+                                } else {
+                                    ViewMode::Split
+                                };
+                                state.sync_session_state();
+                            }
                         }
-                        ui.close_menu();
-                    }
-                    let is_split = current_view_mode == Some(ViewMode::Split);
-                    if ui
-                        .add_enabled(
-                            has_active_tab,
-                            egui::Button::new(if is_split { "✔ Split (Ctrl+3)" } else { "  Split (Ctrl+3)" }),
-                        )
-                        .clicked()
-                    {
-                        if let Some(tab) = state.active_tab_mut() {
-                            tab.view_mode = ViewMode::Split;
-                            state.sync_session_state();
-                        }
-                        ui.close_menu();
-                    }
+                    });
                     ui.separator();
-                    let exp_label = if state.explorer_visible { "✔ Explorer (Ctrl+E)" } else { "  Explorer (Ctrl+E)" };
-                    if ui.button(exp_label).clicked() {
-                        state.explorer_visible = !state.explorer_visible;
-                        ui.close_menu();
-                    }
-                    let focus_label = if state.focus_mode { "✔ Focus (F11)" } else { "  Focus (F11)" };
-                    if ui.button(focus_label).clicked() {
-                        state.focus_mode = !state.focus_mode;
+                    menu_checkbox(ui, &mut state.explorer_visible, "Explorer", "Ctrl+E");
+                    if menu_checkbox(ui, &mut state.focus_mode, "Focus", "F11").changed() {
                         state.explorer_visible = !state.focus_mode;
-                        ui.close_menu();
                     }
                 });
 
                 ui.menu_button("Navigate", |ui| {
+                    ui.set_min_width(240.0);
                     ui.style_mut().wrap = Some(false);
-                    if ui.button("Search Files (Ctrl+P)").clicked() {
+                    if menu_item(ui, "Search Files", "Ctrl+P").clicked() {
                         state.explorer_visible = true;
                         state.explorer.toggle_search();
                         ui.close_menu();
                     }
                     ui.separator();
                     let has_tabs = !state.tabs.is_empty();
-                    if ui
-                        .add_enabled(
-                            has_tabs,
-                            egui::Button::new("Next Tab (Ctrl+Tab)"),
-                        )
-                        .clicked()
-                    {
+                    if menu_item_enabled(ui, has_tabs, "Next Tab", "Ctrl+Tab").clicked() {
                         if let Some(idx) = state.active_tab_index {
                             let next_idx = (idx + 1) % state.tabs.len();
                             state.switch_tab(next_idx);
@@ -369,13 +395,7 @@ pub fn render_menu_bar(ctx: &egui::Context, state: &mut AppState) {
                         }
                         ui.close_menu();
                     }
-                    if ui
-                        .add_enabled(
-                            has_tabs,
-                            egui::Button::new("Previous Tab (Ctrl+Shift+Tab)"),
-                        )
-                        .clicked()
-                    {
+                    if menu_item_enabled(ui, has_tabs, "Previous Tab", "Ctrl+Shift+Tab").clicked() {
                         if let Some(idx) = state.active_tab_index {
                             let prev_idx = if idx == 0 {
                                 state.tabs.len() - 1
@@ -392,13 +412,7 @@ pub fn render_menu_bar(ctx: &egui::Context, state: &mut AppState) {
                         ui.close_menu();
                     }
                     ui.separator();
-                    if ui
-                        .add_enabled(
-                            has_tabs,
-                            egui::Button::new("Go Back (Alt+Left)"),
-                        )
-                        .clicked()
-                    {
+                    if menu_item_enabled(ui, has_tabs, "Go Back", "Alt+Left").clicked() {
                         if let Some(idx) = state.active_tab_index {
                             let prev_idx = if idx == 0 {
                                 state.tabs.len() - 1
@@ -414,13 +428,7 @@ pub fn render_menu_bar(ctx: &egui::Context, state: &mut AppState) {
                         }
                         ui.close_menu();
                     }
-                    if ui
-                        .add_enabled(
-                            has_tabs,
-                            egui::Button::new("Go Forward (Alt+Right)"),
-                        )
-                        .clicked()
-                    {
+                    if menu_item_enabled(ui, has_tabs, "Go Forward", "Alt+Right").clicked() {
                         if let Some(idx) = state.active_tab_index {
                             let next_idx = (idx + 1) % state.tabs.len();
                             state.switch_tab(next_idx);
@@ -435,7 +443,7 @@ pub fn render_menu_bar(ctx: &egui::Context, state: &mut AppState) {
                 });
 
                 ui.menu_button("Settings", |ui| {
-                    ui.set_min_width(220.0);
+                    ui.set_min_width(240.0);
                     ui.label("Base Theme:");
                     ui.horizontal(|ui| {
                         let themes = [

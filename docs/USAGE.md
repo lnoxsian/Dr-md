@@ -17,13 +17,12 @@ Autosave is enabled by default and writes changes after the editor has been idle
 
 ## Views
 
-- Editor view: text editing only.
-- Preview view: rendered Markdown only.
 - Split view: editor and preview side by side.
+- Preview view: rendered Markdown only.
 
 Switch views from the View menu or with the keyboard shortcuts in [docs/SHORTCUTS.md](SHORTCUTS.md).
 
-Each tab keeps its own view mode, so one note can stay in split view while another remains editor-only or preview-only.
+Each tab keeps its own view mode, so one note can stay in split view while another remains preview-only.
 
 ## File Explorer
 

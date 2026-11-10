@@ -102,21 +102,15 @@ impl eframe::App for DoctorMarkdownApp {
                             text_state.store(ctx, editor_id);
                         }
                 }
-                ShortcutAction::ViewEditor => {
+                ShortcutAction::ViewSplit => {
                     if let Some(tab) = self.state.active_tab_mut() {
-                        tab.view_mode = ViewMode::Editor;
+                        tab.view_mode = ViewMode::Split;
                         self.state.sync_session_state();
                     }
                 }
                 ShortcutAction::ViewPreview => {
                     if let Some(tab) = self.state.active_tab_mut() {
                         tab.view_mode = ViewMode::Preview;
-                        self.state.sync_session_state();
-                    }
-                }
-                ShortcutAction::ViewSplit => {
-                    if let Some(tab) = self.state.active_tab_mut() {
-                        tab.view_mode = ViewMode::Split;
                         self.state.sync_session_state();
                     }
                 }

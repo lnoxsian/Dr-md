@@ -1,5 +1,9 @@
 pub fn preprocess_wiki_links(content: &str) -> String {
-    let mut result = String::new();
+    if !content.contains("[[") {
+        return content.to_string();
+    }
+
+    let mut result = String::with_capacity(content.len());
     let mut chars = content.chars().peekable();
     while let Some(c) = chars.next() {
         if c == '[' && chars.peek() == Some(&'[') {
@@ -21,13 +25,19 @@ pub fn preprocess_wiki_links(content: &str) -> String {
                 }
             }
             if found {
+                result.push('[');
                 if let Some(pipe_pos) = link.find('|') {
                     let path = &link[..pipe_pos];
                     let label = &link[pipe_pos + 1..];
-                    result.push_str(&format!("[{}]({}.md)", label, path));
+                    result.push_str(label);
+                    result.push_str("](");
+                    result.push_str(path);
                 } else {
-                    result.push_str(&format!("[{}]({}.md)", link, link));
+                    result.push_str(&link);
+                    result.push_str("](");
+                    result.push_str(&link);
                 }
+                result.push_str(".md)");
             } else {
                 result.push_str("[[");
                 result.push_str(&link);

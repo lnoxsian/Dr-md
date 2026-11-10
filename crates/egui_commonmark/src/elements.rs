@@ -193,10 +193,7 @@ pub fn code_block<'t>(
         } else {
             text.to_owned()
         };
-        ui.ctx().copy_text(copy_text.clone());
-        if let Ok(mut clipboard) = arboard::Clipboard::new() {
-            let _ = clipboard.set_text(copy_text);
-        }
+        ui.ctx().copy_text(copy_text);
     } else if copied_icon && !copy_button.hovered() {
         ui.memory_mut(|m| *m.data.get_temp_mut_or_default(persistent_id) = false);
     }

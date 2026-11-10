@@ -78,8 +78,14 @@ impl MarkdownPreview {
             self.last_path = Some(tab_path.to_path_buf());
         }
 
-        let mut processed = self.processed_content.clone();
-        let processed_old = processed.clone();
+        let is_interacting = ui.input(|i| i.pointer.any_click() || i.pointer.any_released());
+        let (mut processed, processed_old) = if is_interacting {
+            let p = self.processed_content.clone();
+            let old = p.clone();
+            (Some(p), Some(old))
+        } else {
+            (None, None)
+        };
 
         let cursor_idx = editor.cursor.char_idx;
         if mirror_mode && self.last_cursor_char_idx != Some(cursor_idx) {
@@ -153,7 +159,9 @@ impl MarkdownPreview {
                         _ => {}
                     }
 
-                    viewer.show_mut(ui, &mut self.cache, &mut processed);
+                    let content_target =
+                        processed.as_mut().unwrap_or(&mut self.processed_content);
+                    viewer.show_mut(ui, &mut self.cache, content_target);
 
                     // Highlight matching search keywords inside the preview pane
                     if editor_renderer.find_visible && !editor_renderer.find_query.is_empty() {
@@ -218,7 +226,9 @@ impl MarkdownPreview {
         self.last_content_height = scroll_output.content_size.y;
         self.last_viewport_height = scroll_output.inner_rect.height();
 
-        if processed != processed_old {
+        if let (Some(processed), Some(processed_old)) = (processed, processed_old)
+            && processed != processed_old
+        {
             // Apply checkbox changes back to content line by line
             let old_lines: Vec<&str> = processed_old.lines().collect();
             let new_lines: Vec<&str> = processed.lines().collect();
@@ -284,7 +294,8 @@ impl MarkdownPreview {
                     }
                 }
                 self.cached_content = orig_lines.join("\n");
-                self.processed_content = super::parser::preprocess_wiki_links(&self.cached_content);
+                self.processed_content =
+                    super::parser::preprocess_wiki_links(&self.cached_content);
                 editor.set_text(&self.cached_content);
                 self.last_version = editor.version;
             }

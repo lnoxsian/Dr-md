@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EditKind {
     None,
@@ -21,7 +23,7 @@ pub enum EditType {
 const MAX_UNDO_STACK_SIZE: usize = 100;
 
 pub struct UndoStack {
-    undo_stack: Vec<String>,
+    undo_stack: VecDeque<String>,
     redo_stack: Vec<String>,
 
     // Tracking state for word-by-word grouping
@@ -33,7 +35,7 @@ pub struct UndoStack {
 impl UndoStack {
     pub fn new() -> Self {
         Self {
-            undo_stack: Vec::new(),
+            undo_stack: VecDeque::new(),
             redo_stack: Vec::new(),
             last_edit_kind: EditKind::None,
             last_edit_idx: 0,
@@ -42,10 +44,10 @@ impl UndoStack {
     }
 
     pub fn push(&mut self, text: String) {
-        if self.undo_stack.last() != Some(&text) {
-            self.undo_stack.push(text);
+        if self.undo_stack.back() != Some(&text) {
+            self.undo_stack.push_back(text);
             if self.undo_stack.len() > MAX_UNDO_STACK_SIZE {
-                self.undo_stack.remove(0);
+                self.undo_stack.pop_front();
             }
             self.redo_stack.clear();
         }
@@ -79,14 +81,13 @@ impl UndoStack {
             || self.last_edit_kind != current_kind
             || !self.is_contiguous(start_idx, change_len, &edit_type);
 
-        if is_boundary
-            && self.undo_stack.last() != Some(&old_text) {
-                self.undo_stack.push(old_text);
-                if self.undo_stack.len() > MAX_UNDO_STACK_SIZE {
-                    self.undo_stack.remove(0);
-                }
-                self.redo_stack.clear();
+        if is_boundary && self.undo_stack.back() != Some(&old_text) {
+            self.undo_stack.push_back(old_text);
+            if self.undo_stack.len() > MAX_UNDO_STACK_SIZE {
+                self.undo_stack.pop_front();
             }
+            self.redo_stack.clear();
+        }
 
         self.last_edit_kind = current_kind;
         self.last_edit_idx = start_idx;
@@ -95,7 +96,7 @@ impl UndoStack {
 
     pub fn undo(&mut self, current: String) -> Option<String> {
         self.reset_tracking();
-        if let Some(prev) = self.undo_stack.pop() {
+        if let Some(prev) = self.undo_stack.pop_back() {
             self.redo_stack.push(current);
             Some(prev)
         } else {
@@ -106,7 +107,7 @@ impl UndoStack {
     pub fn redo(&mut self, current: String) -> Option<String> {
         self.reset_tracking();
         if let Some(next) = self.redo_stack.pop() {
-            self.undo_stack.push(current);
+            self.undo_stack.push_back(current);
             Some(next)
         } else {
             None
@@ -198,20 +199,18 @@ pub fn find_char_difference(
     let mut suffix_len = 0;
     let mut old_iter_rev = old_str.chars().rev();
     let mut new_iter_rev = new_str.chars().rev();
-    let max_suffix = old_str
-        .chars()
-        .count()
+    let old_char_count = old_str.chars().count();
+    let new_char_count = new_str.chars().count();
+
+    let max_suffix = old_char_count
         .saturating_sub(prefix_len)
-        .min(new_str.chars().count().saturating_sub(prefix_len));
+        .min(new_char_count.saturating_sub(prefix_len));
     for _ in 0..max_suffix {
         match (old_iter_rev.next(), new_iter_rev.next()) {
             (Some(c1), Some(c2)) if c1 == c2 => suffix_len += 1,
             _ => break,
         }
     }
-
-    let old_char_count = old_str.chars().count();
-    let new_char_count = new_str.chars().count();
 
     let deleted_count = old_char_count - prefix_len - suffix_len;
     let inserted_count = new_char_count - prefix_len - suffix_len;

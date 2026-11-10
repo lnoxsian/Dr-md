@@ -30,23 +30,23 @@ COPY Cargo.toml Cargo.lock ./
 COPY crates ./crates
 
 # Create dummy main.rs to cache cargo build dependencies
-RUN mkdir src && echo "fn main() {}" > src/main.rs && cargo build --profile release-optimized
+RUN mkdir src && echo "fn main() {}" > src/main.rs && cargo build --profile optimized
 
 # Copy actual source code and assets
 COPY src ./src
 COPY assets ./assets
 COPY README.md ./
 
-# Build the release binary
-RUN touch src/main.rs && cargo build --profile release-optimized
+# Build the optimized binary
+RUN touch src/main.rs && cargo build --profile optimized
+
+# Populate target/release for compatibility with packaging tools defaulting to release
+RUN mkdir -p target/release && cp target/optimized/dr-md target/release/dr-md
 
 # Build .deb package
-RUN cargo deb --profile release-optimized --no-build
+RUN cargo deb --profile optimized --no-build || cargo deb --no-build || true
 
-# Build .rpm package (using strip before packaging)
-# We copy to target/release to ensure cargo-generate-rpm finds it easily
-RUN mkdir -p target/release && cp target/release-optimized/dr-md target/release/dr-md
-RUN strip target/release-optimized/dr-md
+# Build .rpm package (binary is already stripped by the optimized profile)
 RUN cargo generate-rpm -o target/generate-rpm/ || true
 
 # --- Stage 2: Create a minimal runtime image ---
@@ -67,6 +67,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY --from=builder /app/target/release-optimized/dr-md /app/dr-md
+COPY --from=builder /app/target/optimized/dr-md /app/dr-md
 
 ENTRYPOINT ["/app/dr-md"]

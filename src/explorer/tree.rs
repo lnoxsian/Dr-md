@@ -89,6 +89,16 @@ impl FileTree {
         matches: &mut Vec<(PathBuf, String, String)>,
     ) {
         let query_lower = query.to_lowercase();
+        self.collect_matching_files_inner(dir, root, &query_lower, matches);
+    }
+
+    fn collect_matching_files_inner(
+        &self,
+        dir: &Path,
+        root: &Path,
+        query_lower: &str,
+        matches: &mut Vec<(PathBuf, String, String)>,
+    ) {
         if let Ok(entries) = fs::read_dir(dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
@@ -98,7 +108,7 @@ impl FileTree {
                 }
                 let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
                 if is_dir {
-                    self.collect_matching_files(&path, root, query, matches);
+                    self.collect_matching_files_inner(&path, root, query_lower, matches);
                 } else {
                     let is_md = path
                         .extension()
@@ -106,10 +116,13 @@ impl FileTree {
                         .unwrap_or(false);
                     if is_md {
                         let rel_path = path.strip_prefix(root).unwrap_or(&path);
-                        let rel_str = rel_path.to_string_lossy().into_owned();
-                        if name.to_lowercase().contains(&query_lower)
-                            || rel_str.to_lowercase().contains(&query_lower)
-                        {
+                        let matches_name = name.to_lowercase().contains(query_lower);
+                        let matches_path = if matches_name {
+                            true
+                        } else {
+                            rel_path.to_string_lossy().to_lowercase().contains(query_lower)
+                        };
+                        if matches_path {
                             let parent_dir = rel_path
                                 .parent()
                                 .map(|p| p.to_string_lossy().into_owned())
@@ -463,16 +476,9 @@ impl FileTree {
     }
 
     fn sort_entries(&self, entries: &mut [fs::DirEntry]) {
-        entries.sort_by(|a, b| {
-            let a_is_dir = a.file_type().map(|t| t.is_dir()).unwrap_or(false);
-            let b_is_dir = b.file_type().map(|t| t.is_dir()).unwrap_or(false);
-            if a_is_dir && !b_is_dir {
-                std::cmp::Ordering::Less
-            } else if !a_is_dir && b_is_dir {
-                std::cmp::Ordering::Greater
-            } else {
-                a.file_name().cmp(&b.file_name())
-            }
+        entries.sort_by_key(|e| {
+            let is_dir = e.file_type().map(|t| t.is_dir()).unwrap_or(false);
+            (!is_dir, e.file_name())
         });
     }
 

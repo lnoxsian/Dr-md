@@ -11,8 +11,8 @@ if ! command -v rpmbuild &> /dev/null; then
     exit 1
 fi
 
-echo "Building release binary..."
-cargo build --profile release-optimized
+echo "Building optimized binary..."
+cargo build --profile optimized
 
 # Extract version from Cargo.toml
 VERSION=$(grep -E "^version\s*=\s*" Cargo.toml | head -n 1 | cut -d '"' -f 2)
@@ -36,7 +36,7 @@ mkdir -p "$RPM_TOPDIR/RPMS"
 mkdir -p "$RPM_TOPDIR/SRPMS"
 
 # Copy binary to SOURCES
-cp target/release-optimized/dr-md "$RPM_TOPDIR/SOURCES/"
+cp target/optimized/dr-md "$RPM_TOPDIR/SOURCES/"
 chmod 755 "$RPM_TOPDIR/SOURCES/dr-md"
 
 # Copy icons of all sizes to SOURCES

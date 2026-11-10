@@ -460,9 +460,8 @@ Ctrl+L       checkbox
 ## Views
 
 ```text
-Ctrl+1       editor
+Ctrl+1       split view
 Ctrl+2       preview
-Ctrl+3       split view
 Ctrl+E       toggle explorer
 F11          focus mode
 ```

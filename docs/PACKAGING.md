@@ -10,25 +10,17 @@ Ensure you also have the build requirements for Rust and local graphic/audio dev
 
 ## Packaging
 
-The repository provides automated workflows in both the `Makefile` and `Justfile` to package `dr.md`.
+The repository provides an automated workflow in the `Makefile` to package `dr.md`.
 
 ### Using Make
 
-Run the following command to build the release binary and compile the `.deb` package:
+Run the following command to build the optimized binary and compile the `.deb` package:
 
 ```bash
 make package-deb
 ```
 
-### Using Just
-
-Alternatively, if you use `just`:
-
-```bash
-just package-deb
-```
-
-Both commands will output the completed package in `target/debian/`:
+The command will output the completed package in `target/debian/`:
 
 ```
 target/debian/dr-md_<VERSION>_<ARCHITECTURE>.deb
@@ -62,7 +54,7 @@ The packaging script (`scripts/package_deb.sh`) builds a package structure conta
 
 | Path | Description |
 |---|---|
-| `/usr/bin/dr-md` | The compiled release binary. |
+| `/usr/bin/dr-md` | The compiled optimized binary. |
 | `/usr/share/applications/dr-md.desktop` | Application launcher configuration (for app menus, docks, and search). |
 | `/usr/share/icons/hicolor/256x256/apps/dr-md.png` | Native high-resolution application icon. |
 | `DEBIAN/control` | Control metadata (version, architecture, dependencies, description). |

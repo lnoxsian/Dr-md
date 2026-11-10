@@ -31,7 +31,6 @@ pub enum ShortcutAction {
     Table,
 
     // Views
-    ViewEditor,
     ViewPreview,
     ViewSplit,
     ToggleExplorer,
@@ -142,14 +141,13 @@ pub fn handle_key_events(ctx: &egui::Context) -> Option<ShortcutAction> {
         }
 
         // Views
-        if check_and_consume(egui::Key::Num1, true, false, false) {
-            return Some(ShortcutAction::ViewEditor);
+        if check_and_consume(egui::Key::Num1, true, false, false)
+            || check_and_consume(egui::Key::Num3, true, false, false)
+        {
+            return Some(ShortcutAction::ViewSplit);
         }
         if check_and_consume(egui::Key::Num2, true, false, false) {
             return Some(ShortcutAction::ViewPreview);
-        }
-        if check_and_consume(egui::Key::Num3, true, false, false) {
-            return Some(ShortcutAction::ViewSplit);
         }
         if check_and_consume(egui::Key::E, true, false, false) {
             return Some(ShortcutAction::ToggleExplorer);

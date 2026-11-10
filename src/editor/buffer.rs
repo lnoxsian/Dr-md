@@ -19,8 +19,8 @@ impl EditBuffer {
     }
 
     pub fn load_file<P: AsRef<Path>>(&mut self, path: P) -> Result<()> {
-        let content = fs::read_to_string(path)?;
-        self.rope = Rope::from_str(&content);
+        let file = fs::File::open(path)?;
+        self.rope = Rope::from_reader(std::io::BufReader::new(file))?;
         Ok(())
     }
 

@@ -34,15 +34,17 @@ On other distributions, install the equivalent X11, Wayland, OpenGL, and audio d
 ```bash
 cargo build
 cargo build --release
+cargo build --profile optimized
 ```
 
-The debug build is best for development. The release build produces the optimized binary in `target/release/dr-md`.
+The debug build is best for development. The release build produces the standard release binary in `target/release/dr-md`. The optimized build (`--profile optimized`) produces the size-minimized, high-performance production binary in `target/optimized/dr-md` (with full LTO, single codegen unit, stripped symbols, and panic abort).
 
 ## Run The App
 
 ```bash
 cargo run
 cargo run --release
+cargo run --profile optimized
 ```
 
 The application starts with an empty vault if no folder is provided. If a config file already exists, dr.md restores the last opened folder.
@@ -57,20 +59,23 @@ cargo clippy --workspace --all-targets --all-features -- -D warnings
 
 ## Task Commands
 
-The repository includes both `Justfile` and `Makefile` targets:
+The repository includes `Makefile` targets:
 
 - `build` -> `cargo build`
 - `release` -> `cargo build --release`
+- `optimized` -> `cargo build --profile optimized`
 - `check` -> `cargo check`
 - `run` -> `cargo run`
 - `run-release` -> `cargo run --release`
+- `run-optimized` -> `cargo run --profile optimized`
 - `test` -> `cargo test`
 - `clean` -> `cargo clean`
 - `fmt` -> `cargo fmt --all -- --check`
 - `clippy` -> `cargo clippy --workspace --all-targets --all-features -- -D warnings`
-- `package-deb` -> packages the release binary and desktop files into a `.deb` package
+- `package-deb` -> packages the optimized binary and desktop files into a `.deb` package
+- `package-rpm` -> packages the optimized binary and desktop files into a `.rpm` package
 
-The `make` and `just` targets are intentionally aligned so either workflow can be used without learning a second command set. See [PACKAGING.md](PACKAGING.md) for detailed installation instructions.
+The `make` targets provide standard shortcuts for development and packaging workflows. See [PACKAGING.md](PACKAGING.md) for detailed installation instructions.
 
 ## Docker Build
 
@@ -88,7 +93,7 @@ Use Docker when you want a repeatable Linux build environment or when the host m
 make docker-export
 ```
 
-This produces a release binary at `target/docker/dr-md`.
+This produces an optimized binary at `target/docker/dr-md`.
 
 The exported binary is copied out of the builder stage, so it can be distributed or archived without the full image.
 

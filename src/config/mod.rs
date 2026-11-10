@@ -72,9 +72,9 @@ pub enum CursorStyle {
 #[serde(rename_all = "lowercase")]
 #[derive(Default)]
 pub enum ViewMode {
-    Editor,
     Preview,
     #[default]
+    #[serde(alias = "editor")]
     Split,
 }
 
@@ -608,5 +608,27 @@ mod tests {
     fn test_setup_fonts() {
         let ctx = egui::Context::default();
         setup_fonts(&ctx);
+    }
+
+    #[test]
+    fn test_view_mode_serde() {
+        // Deserializing "preview" -> ViewMode::Preview
+        let preview_tab: TabState =
+            toml::from_str("path = \"test.md\"\nview_mode = \"preview\"\n").unwrap();
+        assert_eq!(preview_tab.view_mode, ViewMode::Preview);
+
+        // Deserializing "split" -> ViewMode::Split
+        let split_tab: TabState =
+            toml::from_str("path = \"test.md\"\nview_mode = \"split\"\n").unwrap();
+        assert_eq!(split_tab.view_mode, ViewMode::Split);
+
+        // Deserializing legacy "editor" -> ViewMode::Split
+        let legacy_tab: TabState =
+            toml::from_str("path = \"test.md\"\nview_mode = \"editor\"\n").unwrap();
+        assert_eq!(legacy_tab.view_mode, ViewMode::Split);
+
+        // Serializing TabState with ViewMode::Split -> contains "split"
+        let split_str = toml::to_string(&split_tab).unwrap();
+        assert!(split_str.contains("split"));
     }
 }

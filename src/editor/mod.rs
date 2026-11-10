@@ -74,11 +74,11 @@ impl Editor {
     }
 
     pub fn sync_text(&mut self, new_text: &str) {
-        let old_text = self.buffer.to_string();
-        if old_text == new_text {
+        if self.buffer.rope == new_text {
             return;
         }
 
+        let old_text = self.buffer.to_string();
         self.undo_stack.push_change(old_text, new_text);
         self.buffer = EditBuffer::from_str(new_text);
         self.is_dirty = true;

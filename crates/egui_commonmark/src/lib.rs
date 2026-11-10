@@ -25,9 +25,6 @@
 //! image = { version = "0.24", default-features = false, features = ["png"] }
 //! ```
 //!
-#![cfg_attr(feature = "document-features", doc = "# Features")]
-#![cfg_attr(feature = "document-features", doc = document_features::document_features!())]
-
 use std::collections::HashMap;
 
 use egui::{self, text::LayoutJob, Id, RichText, TextStyle, Ui};
@@ -39,11 +36,8 @@ mod mermaid;
 
 pub use alerts::*;
 
-#[cfg(all(feature = "comrak", feature = "pulldown_cmark"))]
-compile_error!("Cannot have multiple different parsing backends enabled at the same time");
-
-#[cfg(not(any(feature = "comrak", feature = "pulldown_cmark")))]
-compile_error!("Either the pulldown_cmark or comrak backend must be enabled");
+#[cfg(not(feature = "pulldown_cmark"))]
+compile_error!("The pulldown_cmark backend must be enabled");
 
 #[cfg(feature = "better_syntax_highlighting")]
 use syntect::{
@@ -408,7 +402,6 @@ impl CommonMarkViewer {
         self
     }
 
-    #[cfg(not(feature = "comrak"))] // not supported by the backend atm.
     /// Specify what kind of alerts are supported. This can also be used to localize alerts.
     ///
     /// By default [github flavoured markdown style alerts](https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax#alerts)
@@ -434,14 +427,6 @@ impl CommonMarkViewer {
             &self.options,
             text,
             false,
-        );
-
-        #[cfg(feature = "comrak")]
-        let response = parsers::comrak::CommonMarkViewerInternal::new(self.source_id).show(
-            ui,
-            cache,
-            &self.options,
-            text,
         );
 
         response

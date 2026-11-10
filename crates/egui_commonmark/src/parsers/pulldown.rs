@@ -31,7 +31,11 @@ fn render_math_to_svg(latex: &str, font_size: f32, text_color: egui::Color32) ->
         text_color.b(),
         text_color.a() as f32 / 255.0
     );
-    let svg = svg.replace("rgba(0,0,0,1)", &color_str);
+    let svg = svg
+        .replace("rgba(0,0,0,1)", &color_str)
+        .replace("rgb(0,0,0)", &color_str)
+        .replace("#000000", &color_str)
+        .replace("#000", &color_str);
     
     Ok(svg)
 }
@@ -883,7 +887,11 @@ impl CommonMarkViewerInternal {
                 MathSegment::InlineMath(m) => {
                     let decoded_m = decode_math_placeholders(m);
                     let font_size = ui.style().text_styles.get(&egui::TextStyle::Body).map_or(14.0, |d| d.size);
-                    let text_color = ui.visuals().text_color();
+                    let text_color = if ui.visuals().dark_mode {
+                        egui::Color32::WHITE
+                    } else {
+                        ui.visuals().text_color()
+                    };
                     
                     // Create a unique hash for the LaTeX content, font size, and text color
                     let mut hasher = std::collections::hash_map::DefaultHasher::new();
@@ -911,7 +919,10 @@ impl CommonMarkViewerInternal {
                         ui.add(image);
                     } else {
                         // Fallback to plain text on error
-                        let rich_text = self.text_style.to_richtext(ui, &decoded_m);
+                        let mut rich_text = self.text_style.to_richtext(ui, &decoded_m);
+                        if ui.visuals().dark_mode {
+                            rich_text = rich_text.color(egui::Color32::WHITE);
+                        }
                         if let Some(link) = &mut self.link {
                             link.text.push(rich_text);
                         } else {
@@ -922,7 +933,11 @@ impl CommonMarkViewerInternal {
                 MathSegment::DisplayMath(m) => {
                     let decoded_m = decode_math_placeholders(m);
                     let font_size = ui.style().text_styles.get(&egui::TextStyle::Body).map_or(14.0, |d| d.size) * 1.2;
-                    let text_color = ui.visuals().text_color();
+                    let text_color = if ui.visuals().dark_mode {
+                        egui::Color32::WHITE
+                    } else {
+                        ui.visuals().text_color()
+                    };
                     
                     let mut hasher = std::collections::hash_map::DefaultHasher::new();
                     use std::hash::Hash;
@@ -960,7 +975,10 @@ impl CommonMarkViewerInternal {
                         }
                         ui.horizontal(|ui| {
                             ui.label("    ");
-                            let rich_text = self.text_style.to_richtext(ui, &decoded_m).monospace();
+                            let mut rich_text = self.text_style.to_richtext(ui, &decoded_m).monospace();
+                            if ui.visuals().dark_mode {
+                                rich_text = rich_text.color(egui::Color32::WHITE);
+                            }
                             ui.label(rich_text);
                         });
                         newline(ui);
@@ -1197,6 +1215,15 @@ $$
         let svg = render_math_to_svg(latex, 14.0, egui::Color32::BLACK).unwrap();
         assert!(svg.contains("<svg"));
         assert!(svg.contains("<path"));
+    }
+
+    #[test]
+    fn test_math_dark_mode_white_symbols() {
+        let latex = r"E = mc^2";
+        let svg = render_math_to_svg(latex, 14.0, egui::Color32::WHITE).unwrap();
+        assert!(svg.contains("<svg"));
+        assert!(svg.contains("rgba(255,255,255,1)"));
+        assert!(!svg.contains("rgba(0,0,0,1)"));
     }
 
     #[test]

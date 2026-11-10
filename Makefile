@@ -1,4 +1,4 @@
-.PHONY: default help build build-crates build-workspace release check run run-release test clean fmt clippy docker-build docker-export update-version generate-icons generate-logos generate-assets package-deb package-rpm
+.PHONY: default help build build-crates build-workspace release optimized check run run-release run-optimized test clean fmt clippy docker-build docker-export update-version generate-icons generate-logos generate-assets package-deb package-rpm
 
 default: help
 
@@ -19,9 +19,13 @@ build-crates:
 build-workspace:
 	cargo build --workspace
 
-# Slow build (fully optimized release profile)
+# Build release binary (standard release profile)
 release:
-	cargo build --profile release-optimized
+	cargo build --release
+
+# Build optimized binary (production profile with full LTO and stripped symbols)
+optimized:
+	cargo build --profile optimized
 
 # Fast check (syntax and type checking without code gen)
 check:
@@ -33,7 +37,11 @@ run:
 
 # Run in release mode
 run-release:
-	cargo run --profile release-optimized
+	cargo run --release
+
+# Run in optimized mode
+run-optimized:
+	cargo run --profile optimized
 
 # Run tests
 test:
@@ -55,11 +63,11 @@ clippy:
 docker-build:
 	docker build -t dr-md .
 
-# Export the compiled release binary from the Docker container to target/docker/dr-md
+# Export the compiled optimized binary from the Docker container to target/docker/dr-md
 docker-export:
 	docker build --target builder -t dr-md-builder .
 	mkdir -p target/docker
-	docker run --rm --entrypoint cat dr-md-builder /app/target/release/dr-md > target/docker/dr-md
+	docker run --rm --entrypoint cat dr-md-builder /app/target/optimized/dr-md > target/docker/dr-md
 	chmod +x target/docker/dr-md
 
 # Update the application version in Cargo.toml and VERSION file

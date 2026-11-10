@@ -18,3 +18,7 @@ Thumbs.db
 # Environment & Local Configuration
 .env
 .env.local
+
+# Generated icon assets (generated from assets/icons/dr-md.svg)
+assets/icons/*.png
+assets/icons/*.ico

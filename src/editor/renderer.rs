@@ -2,6 +2,31 @@ use super::Editor;
 use egui::text::LayoutJob;
 use egui::{Color32, FontId, TextFormat};
 
+#[inline]
+pub fn char_to_byte_idx(s: &str, char_idx: usize) -> usize {
+    if s.is_ascii() {
+        return char_idx.min(s.len());
+    }
+    s.char_indices()
+        .nth(char_idx)
+        .map(|(b, _)| b)
+        .unwrap_or(s.len())
+}
+
+#[inline]
+pub fn insert_at_char(s: &mut String, char_idx: usize, text: &str) {
+    let byte_idx = char_to_byte_idx(s, char_idx);
+    s.insert_str(byte_idx, text);
+}
+
+#[inline]
+pub fn remove_at_char(s: &mut String, char_idx: usize) {
+    let byte_idx = char_to_byte_idx(s, char_idx);
+    if byte_idx < s.len() {
+        s.remove(byte_idx);
+    }
+}
+
 fn get_editor_id(editor: &Editor) -> egui::Id {
     if let Some(ref path) = editor.active_path {
         egui::Id::new(("editor_text_edit", path))
@@ -89,23 +114,37 @@ impl EditorRenderer {
             return;
         }
 
-        // Build byte-to-char index mapping
-        let mut byte_to_char = vec![0; self.content_buffer.len() + 1];
-        let mut char_idx = 0;
-        let mut byte_idx = 0;
-        for c in self.content_buffer.chars() {
-            let len = c.len_utf8();
-            for _ in 0..len {
-                if byte_idx < byte_to_char.len() {
-                    byte_to_char[byte_idx] = char_idx;
+        let is_ascii = self.content_buffer.is_ascii();
+        let mut byte_to_char = Vec::new();
+        let total_chars = if is_ascii {
+            self.content_buffer.len()
+        } else {
+            byte_to_char.resize(self.content_buffer.len() + 1, 0);
+            let mut char_idx = 0;
+            let mut byte_idx = 0;
+            for c in self.content_buffer.chars() {
+                let len = c.len_utf8();
+                for _ in 0..len {
+                    if byte_idx < byte_to_char.len() {
+                        byte_to_char[byte_idx] = char_idx;
+                    }
+                    byte_idx += 1;
                 }
-                byte_idx += 1;
+                char_idx += 1;
             }
-            char_idx += 1;
-        }
-        if byte_idx < byte_to_char.len() {
-            byte_to_char[byte_idx] = char_idx;
-        }
+            if byte_idx < byte_to_char.len() {
+                byte_to_char[byte_idx] = char_idx;
+            }
+            char_idx
+        };
+
+        let map_byte = |b: usize| -> usize {
+            if is_ascii {
+                b.min(total_chars)
+            } else {
+                byte_to_char.get(b).copied().unwrap_or(total_chars)
+            }
+        };
 
         if self.use_regex {
             let mut builder = regex::RegexBuilder::new(&self.find_query);
@@ -113,38 +152,35 @@ impl EditorRenderer {
             if let Ok(re) = builder.build() {
                 for m in re.find_iter(&self.content_buffer) {
                     if m.start() < m.end() {
-                        let c_start = byte_to_char.get(m.start()).cloned().unwrap_or(char_idx);
-                        let c_end = byte_to_char.get(m.end()).cloned().unwrap_or(char_idx);
+                        let c_start = map_byte(m.start());
+                        let c_end = map_byte(m.end());
                         self.matches.push(c_start..c_end);
                         self.byte_matches.push(m.start()..m.end());
                     }
                 }
             }
         } else {
-            // Normal string search (case sensitive or insensitive)
-            let query = if self.case_sensitive {
-                self.find_query.clone()
+            let query_owned;
+            let query: &str = if self.case_sensitive {
+                &self.find_query
             } else {
-                self.find_query.to_lowercase()
+                query_owned = self.find_query.to_lowercase();
+                &query_owned
             };
-            let text = if self.case_sensitive {
-                self.content_buffer.clone()
+            let text_owned;
+            let text: &str = if self.case_sensitive {
+                &self.content_buffer
             } else {
-                self.content_buffer.to_lowercase()
+                text_owned = self.content_buffer.to_lowercase();
+                &text_owned
             };
 
             let mut start_byte = 0;
-            while let Some(idx) = text[start_byte..].find(&query) {
+            while let Some(idx) = text[start_byte..].find(query) {
                 let actual_start_byte = start_byte + idx;
                 let actual_end_byte = actual_start_byte + query.len();
-                let c_start = byte_to_char
-                    .get(actual_start_byte)
-                    .cloned()
-                    .unwrap_or(char_idx);
-                let c_end = byte_to_char
-                    .get(actual_end_byte)
-                    .cloned()
-                    .unwrap_or(char_idx);
+                let c_start = map_byte(actual_start_byte);
+                let c_end = map_byte(actual_end_byte);
                 self.matches.push(c_start..c_end);
                 self.byte_matches.push(actual_start_byte..actual_end_byte);
                 start_byte = actual_end_byte;
@@ -154,14 +190,12 @@ impl EditorRenderer {
         // Adjust active_match_index
         if self.matches.is_empty() {
             self.active_match_index = None;
-        } else {
-            if let Some(idx) = self.active_match_index {
-                if idx >= self.matches.len() {
-                    self.active_match_index = Some(0);
-                }
-            } else {
+        } else if let Some(idx) = self.active_match_index {
+            if idx >= self.matches.len() {
                 self.active_match_index = Some(0);
             }
+        } else {
+            self.active_match_index = Some(0);
         }
     }
 
@@ -181,19 +215,23 @@ impl EditorRenderer {
                 }
             }
         } else {
-            let query = if self.case_sensitive {
-                self.find_query.clone()
+            let query_owned;
+            let query: &str = if self.case_sensitive {
+                &self.find_query
             } else {
-                self.find_query.to_lowercase()
+                query_owned = self.find_query.to_lowercase();
+                &query_owned
             };
-            let search_text = if self.case_sensitive {
-                text.to_string()
+            let search_text_owned;
+            let search_text: &str = if self.case_sensitive {
+                text
             } else {
-                text.to_lowercase()
+                search_text_owned = text.to_lowercase();
+                &search_text_owned
             };
 
             let mut start_pos = 0;
-            while let Some(idx) = search_text[start_pos..].find(&query) {
+            while let Some(idx) = search_text[start_pos..].find(query) {
                 let match_start_byte = start_pos + idx;
                 let match_end_byte = match_start_byte + query.len();
 
@@ -265,18 +303,16 @@ impl EditorRenderer {
         }
         let range = self.matches[idx].clone();
 
+        let byte_start = char_to_byte_idx(&self.content_buffer, range.start);
+        let byte_end = char_to_byte_idx(&self.content_buffer, range.end);
+
         let replacement = if self.use_regex {
             let mut builder = regex::RegexBuilder::new(&self.find_query);
             builder.case_insensitive(!self.case_sensitive);
             if let Ok(re) = builder.build() {
-                let matched_str = self
-                    .content_buffer
-                    .chars()
-                    .skip(range.start)
-                    .take(range.end - range.start)
-                    .collect::<String>();
+                let matched_str = &self.content_buffer[byte_start..byte_end];
                 let mut expanded = String::new();
-                if let Some(captures) = re.captures(&matched_str) {
+                if let Some(captures) = re.captures(matched_str) {
                     captures.expand(&self.replace_query, &mut expanded);
                 } else {
                     expanded = self.replace_query.clone();
@@ -289,11 +325,8 @@ impl EditorRenderer {
             self.replace_query.clone()
         };
 
-        let mut chars: Vec<char> = self.content_buffer.chars().collect();
-        if range.start <= chars.len() && range.end <= chars.len() {
-            let replace_chars: Vec<char> = replacement.chars().collect();
-            chars.splice(range.start..range.end, replace_chars);
-            self.content_buffer = chars.into_iter().collect();
+        if byte_start <= self.content_buffer.len() && byte_end <= self.content_buffer.len() {
+            self.content_buffer.replace_range(byte_start..byte_end, &replacement);
 
             editor.sync_text(&self.content_buffer);
             editor.version += 1;
@@ -351,14 +384,12 @@ impl EditorRenderer {
                 self.content_buffer = replaced.into_owned();
             }
         } else {
-            let mut chars: Vec<char> = self.content_buffer.chars().collect();
-            let replace_chars: Vec<char> = self.replace_query.chars().collect();
-            for range in self.matches.iter().rev() {
-                if range.start <= chars.len() && range.end <= chars.len() {
-                    chars.splice(range.start..range.end, replace_chars.clone());
+            for byte_range in self.byte_matches.iter().rev() {
+                if byte_range.end <= self.content_buffer.len() {
+                    self.content_buffer
+                        .replace_range(byte_range.clone(), &self.replace_query);
                 }
             }
-            self.content_buffer = chars.into_iter().collect();
         }
 
         editor.sync_text(&self.content_buffer);
@@ -393,15 +424,17 @@ impl EditorRenderer {
                         // Egui would replace the selection with the character, making the new cursor a single cursor
                         // at start + 1.
                         if current_idx == secondary_idx && current_idx == prev_start + 1 {
-                            let new_chars: Vec<char> = self.content_buffer.chars().collect();
-                            if prev_start < new_chars.len() {
-                                let typed_char = new_chars[prev_start];
-                                let selected_text: String = self
-                                    .previous_text
-                                    .chars()
-                                    .skip(prev_start)
-                                    .take(prev_end - prev_start)
-                                    .collect();
+                            let byte_prev_start =
+                                char_to_byte_idx(&self.content_buffer, prev_start);
+                            if let Some(typed_char) =
+                                self.content_buffer[byte_prev_start..].chars().next()
+                            {
+                                let prev_byte_start =
+                                    char_to_byte_idx(&self.previous_text, prev_start);
+                                let prev_byte_end =
+                                    char_to_byte_idx(&self.previous_text, prev_end);
+                                let selected_text =
+                                    &self.previous_text[prev_byte_start..prev_byte_end];
 
                                 let mut replacement = None;
                                 let mut cursor_offset = 0;
@@ -409,62 +442,49 @@ impl EditorRenderer {
                                 match typed_char {
                                     '(' => {
                                         replacement = Some(format!("({})", selected_text));
-                                        cursor_offset = selected_text.len() + 2;
+                                        cursor_offset = selected_text.chars().count() + 2;
                                     }
                                     '[' => {
                                         replacement = Some(format!("[{}]()", selected_text));
-                                        cursor_offset = selected_text.len() + 3;
+                                        cursor_offset = selected_text.chars().count() + 3;
                                     }
                                     '{' => {
                                         replacement = Some(format!("{{{}}}", selected_text));
-                                        cursor_offset = selected_text.len() + 2;
+                                        cursor_offset = selected_text.chars().count() + 2;
                                     }
                                     '"' => {
                                         replacement = Some(format!("\"{}\"", selected_text));
-                                        cursor_offset = selected_text.len() + 2;
+                                        cursor_offset = selected_text.chars().count() + 2;
                                     }
                                     '\'' => {
                                         replacement = Some(format!("'{}\'", selected_text));
-                                        cursor_offset = selected_text.len() + 2;
+                                        cursor_offset = selected_text.chars().count() + 2;
                                     }
                                     '`' => {
                                         replacement = Some(format!("`{}`", selected_text));
-                                        cursor_offset = selected_text.len() + 2;
+                                        cursor_offset = selected_text.chars().count() + 2;
                                     }
                                     '*' => {
                                         replacement = Some(format!("*{}*", selected_text));
-                                        cursor_offset = selected_text.len() + 2;
+                                        cursor_offset = selected_text.chars().count() + 2;
                                     }
                                     '_' => {
                                         replacement = Some(format!("_{}_", selected_text));
-                                        cursor_offset = selected_text.len() + 2;
+                                        cursor_offset = selected_text.chars().count() + 2;
                                     }
                                     '~' => {
                                         replacement = Some(format!("~{}~", selected_text));
-                                        cursor_offset = selected_text.len() + 2;
+                                        cursor_offset = selected_text.chars().count() + 2;
                                     }
                                     _ => {}
                                 }
 
                                 if let Some(rep) = replacement {
-                                    let mut final_text = String::new();
-                                    final_text.push_str(
-                                        &self
-                                            .content_buffer
-                                            .chars()
-                                            .take(prev_start)
-                                            .collect::<String>(),
+                                    let typed_len = typed_char.len_utf8();
+                                    self.content_buffer.replace_range(
+                                        byte_prev_start..byte_prev_start + typed_len,
+                                        &rep,
                                     );
-                                    final_text.push_str(&rep);
-                                    final_text.push_str(
-                                        &self
-                                            .content_buffer
-                                            .chars()
-                                            .skip(prev_start + 1)
-                                            .collect::<String>(),
-                                    );
-
-                                    self.content_buffer = final_text;
                                     text_changed = true;
 
                                     let new_cursor_idx = prev_start + cursor_offset;
@@ -480,16 +500,16 @@ impl EditorRenderer {
                         let prev_idx = prev_range.primary.index;
                         if current_idx == secondary_idx {
                             if current_idx == prev_idx + 1 {
-                                let new_chars: Vec<char> = self.content_buffer.chars().collect();
-                                if prev_idx < new_chars.len() {
-                                    let typed_char = new_chars[prev_idx];
-
+                                let prev_byte_idx = char_to_byte_idx(&self.content_buffer, prev_idx);
+                                let current_byte_idx = char_to_byte_idx(&self.content_buffer, current_idx);
+                                if let Some(typed_char) = self.content_buffer[prev_byte_idx..current_byte_idx].chars().next() {
                                     // 0. HANDLE ENTER BETWEEN BRACKETS AND QUOTES
                                     let mut enter_between_pairs = false;
-                                    if typed_char == '\n'
-                                        && prev_idx > 0 && prev_idx + 1 < new_chars.len() {
-                                            let left = new_chars[prev_idx - 1];
-                                            let right = new_chars[prev_idx + 1];
+                                    if typed_char == '\n' && prev_idx > 0 {
+                                        let left_byte_idx = char_to_byte_idx(&self.content_buffer, prev_idx - 1);
+                                        let left = self.content_buffer[left_byte_idx..prev_byte_idx].chars().next();
+                                        let right = self.content_buffer[current_byte_idx..].chars().next();
+                                        if let (Some(left), Some(right)) = (left, right) {
                                             let is_pair = [
                                                 ('{', '}'),
                                                 ('(', ')'),
@@ -502,24 +522,7 @@ impl EditorRenderer {
                                             .any(|&(l, r)| l == left && r == right);
 
                                             if is_pair {
-                                                let mut final_text = String::new();
-                                                final_text.push_str(
-                                                    &self
-                                                        .content_buffer
-                                                        .chars()
-                                                        .take(current_idx)
-                                                        .collect::<String>(),
-                                                );
-                                                final_text.push('\n');
-                                                final_text.push_str(
-                                                    &self
-                                                        .content_buffer
-                                                        .chars()
-                                                        .skip(current_idx)
-                                                        .collect::<String>(),
-                                                );
-
-                                                self.content_buffer = final_text;
+                                                insert_at_char(&mut self.content_buffer, current_idx, "\n");
                                                 text_changed = true;
                                                 enter_between_pairs = true;
 
@@ -529,136 +532,92 @@ impl EditorRenderer {
                                                 ));
                                             }
                                         }
+                                    }
 
                                     // 1. STEP OVER CLOSING BRACKETS
                                     let mut stepped_over = false;
                                     if !enter_between_pairs
                                         && [')', ']', '}', '"', '\'', '`'].contains(&typed_char)
-                                        && current_idx < new_chars.len()
-                                            && new_chars[current_idx] == typed_char
-                                        {
-                                            let mut final_text = String::new();
-                                            final_text.push_str(
-                                                &self
-                                                    .content_buffer
-                                                    .chars()
-                                                    .take(current_idx)
-                                                    .collect::<String>(),
-                                            );
-                                            final_text.push_str(
-                                                &self
-                                                    .content_buffer
-                                                    .chars()
-                                                    .skip(current_idx + 1)
-                                                    .collect::<String>(),
-                                            );
+                                        && self.content_buffer[current_byte_idx..].starts_with(typed_char)
+                                    {
+                                        remove_at_char(&mut self.content_buffer, current_idx);
+                                        text_changed = true;
+                                        stepped_over = true;
 
-                                            self.content_buffer = final_text;
-                                            text_changed = true;
-                                            stepped_over = true;
+                                        let ccursor = egui::text::CCursor::new(current_idx);
+                                        state.cursor.set_char_range(Some(
+                                            egui::text::CCursorRange::two(ccursor, ccursor),
+                                        ));
+                                    }
 
-                                            let ccursor = egui::text::CCursor::new(current_idx);
-                                            state.cursor.set_char_range(Some(
-                                                egui::text::CCursorRange::two(ccursor, ccursor),
-                                            ));
-                                        }
+                                    if !enter_between_pairs && !stepped_over {
+                                        // 2. AUTOCLOSE OPENING BRACKETS & QUOTES
+                                        let next_char = self.content_buffer[current_byte_idx..].chars().next();
+                                        let prev_char = if prev_idx > 0 {
+                                            let left_byte_idx = char_to_byte_idx(&self.content_buffer, prev_idx - 1);
+                                            self.content_buffer[left_byte_idx..prev_byte_idx].chars().next()
+                                        } else {
+                                            None
+                                        };
 
-                                     if !enter_between_pairs && !stepped_over {
-                                         // 2. AUTOCLOSE OPENING BRACKETS & QUOTES
-                                         let next_char = new_chars.get(current_idx).copied();
-                                         let prev_char = if prev_idx > 0 {
-                                             new_chars.get(prev_idx - 1).copied()
-                                         } else {
-                                             None
-                                         };
+                                        let is_before_word =
+                                            next_char.is_some_and(|c| c.is_alphanumeric() || c == '_');
+                                        let is_after_word =
+                                            prev_char.is_some_and(|c| c.is_alphanumeric() || c == '_');
 
-                                         let is_before_word =
-                                             next_char.map_or(false, |c| c.is_alphanumeric() || c == '_');
-                                         let is_after_word =
-                                             prev_char.map_or(false, |c| c.is_alphanumeric() || c == '_');
+                                        let mut autoclose_char = None;
+                                        match typed_char {
+                                            '(' => if !is_before_word { autoclose_char = Some(')') },
+                                            '[' => if !is_before_word { autoclose_char = Some(']') },
+                                            '{' => if !is_before_word { autoclose_char = Some('}') },
+                                            '"' => {
+                                                if !is_before_word && !is_after_word {
+                                                    autoclose_char = Some('"');
+                                                }
+                                            }
+                                            '\'' => {
+                                                // Don't auto-close single quote if after a word (e.g. apostrophe in don't)
+                                                if !is_before_word && !is_after_word {
+                                                    autoclose_char = Some('\'');
+                                                }
+                                            }
+                                            '`' => {
+                                                let is_triple_backtick = if prev_idx >= 2 {
+                                                    let p2_byte = char_to_byte_idx(&self.content_buffer, prev_idx - 2);
+                                                    &self.content_buffer[p2_byte..current_byte_idx] == "```"
+                                                } else {
+                                                    false
+                                                };
 
-                                         let mut autoclose_char = None;
-                                         match typed_char {
-                                             '(' => if !is_before_word { autoclose_char = Some(')') },
-                                             '[' => if !is_before_word { autoclose_char = Some(']') },
-                                             '{' => if !is_before_word { autoclose_char = Some('}') },
-                                             '"' => {
-                                                 if !is_before_word && !is_after_word {
-                                                     autoclose_char = Some('"');
-                                                 }
-                                             }
-                                             '\'' => {
-                                                 // Don't auto-close single quote if after a word (e.g. apostrophe in don't)
-                                                 if !is_before_word && !is_after_word {
-                                                     autoclose_char = Some('\'');
-                                                 }
-                                             }
-                                             '`' => {
-                                                 if prev_idx >= 2
-                                                     && new_chars[prev_idx - 1] == '`'
-                                                     && new_chars[prev_idx - 2] == '`'
-                                                 {
-                                                     let remaining_on_line: String = new_chars[current_idx..]
-                                                         .iter()
-                                                         .take_while(|&&c| c != '\n')
-                                                         .collect();
+                                                if is_triple_backtick {
+                                                    let remaining_on_line = self.content_buffer[current_byte_idx..]
+                                                        .split('\n')
+                                                        .next()
+                                                        .unwrap_or("");
 
-                                                     let is_line_rest_empty = remaining_on_line.trim().is_empty();
-                                                     let already_has_closing_fences = remaining_on_line.trim_start().starts_with("```");
+                                                    let is_line_rest_empty = remaining_on_line.trim().is_empty();
+                                                    let already_has_closing_fences = remaining_on_line.trim_start().starts_with("```");
 
-                                                     if is_line_rest_empty && !already_has_closing_fences {
-                                                         let mut final_text = String::new();
-                                                         final_text.push_str(
-                                                             &self
-                                                                 .content_buffer
-                                                                 .chars()
-                                                                 .take(current_idx)
-                                                                 .collect::<String>(),
-                                                         );
-                                                         final_text.push_str("```");
-                                                         final_text.push_str(
-                                                             &self
-                                                                 .content_buffer
-                                                                 .chars()
-                                                                 .skip(current_idx)
-                                                                 .collect::<String>(),
-                                                         );
+                                                    if is_line_rest_empty && !already_has_closing_fences {
+                                                        insert_at_char(&mut self.content_buffer, current_idx, "```");
+                                                        text_changed = true;
 
-                                                         self.content_buffer = final_text;
-                                                         text_changed = true;
-
-                                                         let ccursor =
-                                                             egui::text::CCursor::new(current_idx);
-                                                         state.cursor.set_char_range(Some(
-                                                             egui::text::CCursorRange::two(
-                                                                 ccursor, ccursor,
-                                                             ),
-                                                         ));
-                                                     }
-                                                 } else if !is_before_word && !is_after_word {
-                                                     autoclose_char = Some('`');
-                                                 }
-                                             }
-                                             '*' => {
-                                                if prev_idx >= 1 && new_chars[prev_idx - 1] == '*' {
-                                                    let mut final_text = String::new();
-                                                    final_text.push_str(
-                                                        &self
-                                                            .content_buffer
-                                                            .chars()
-                                                            .take(current_idx)
-                                                            .collect::<String>(),
-                                                    );
-                                                    final_text.push_str("**");
-                                                    final_text.push_str(
-                                                        &self
-                                                            .content_buffer
-                                                            .chars()
-                                                            .skip(current_idx)
-                                                            .collect::<String>(),
-                                                    );
-
-                                                    self.content_buffer = final_text;
+                                                        let ccursor =
+                                                            egui::text::CCursor::new(current_idx);
+                                                        state.cursor.set_char_range(Some(
+                                                            egui::text::CCursorRange::two(
+                                                                ccursor, ccursor,
+                                                            ),
+                                                        ));
+                                                    }
+                                                } else if !is_before_word && !is_after_word {
+                                                    autoclose_char = Some('`');
+                                                }
+                                            }
+                                            '*' if prev_idx >= 1 => {
+                                                let p1_byte = char_to_byte_idx(&self.content_buffer, prev_idx - 1);
+                                                if &self.content_buffer[p1_byte..current_byte_idx] == "**" {
+                                                    insert_at_char(&mut self.content_buffer, current_idx, "**");
                                                     text_changed = true;
 
                                                     let ccursor =
@@ -670,26 +629,10 @@ impl EditorRenderer {
                                                     ));
                                                 }
                                             }
-                                            '_' => {
-                                                if prev_idx >= 1 && new_chars[prev_idx - 1] == '_' {
-                                                    let mut final_text = String::new();
-                                                    final_text.push_str(
-                                                        &self
-                                                            .content_buffer
-                                                            .chars()
-                                                            .take(current_idx)
-                                                            .collect::<String>(),
-                                                    );
-                                                    final_text.push_str("__");
-                                                    final_text.push_str(
-                                                        &self
-                                                            .content_buffer
-                                                            .chars()
-                                                            .skip(current_idx)
-                                                            .collect::<String>(),
-                                                    );
-
-                                                    self.content_buffer = final_text;
+                                            '_' if prev_idx >= 1 => {
+                                                let p1_byte = char_to_byte_idx(&self.content_buffer, prev_idx - 1);
+                                                if &self.content_buffer[p1_byte..current_byte_idx] == "__" {
+                                                    insert_at_char(&mut self.content_buffer, current_idx, "__");
                                                     text_changed = true;
 
                                                     let ccursor =
@@ -701,26 +644,10 @@ impl EditorRenderer {
                                                     ));
                                                 }
                                             }
-                                            '~'
-                                                if prev_idx >= 1 && new_chars[prev_idx - 1] == '~' => {
-                                                    let mut final_text = String::new();
-                                                    final_text.push_str(
-                                                        &self
-                                                            .content_buffer
-                                                            .chars()
-                                                            .take(current_idx)
-                                                            .collect::<String>(),
-                                                    );
-                                                    final_text.push_str("~~");
-                                                    final_text.push_str(
-                                                        &self
-                                                            .content_buffer
-                                                            .chars()
-                                                            .skip(current_idx)
-                                                            .collect::<String>(),
-                                                    );
-
-                                                    self.content_buffer = final_text;
+                                            '~' if prev_idx >= 1 => {
+                                                let p1_byte = char_to_byte_idx(&self.content_buffer, prev_idx - 1);
+                                                if &self.content_buffer[p1_byte..current_byte_idx] == "~~" {
+                                                    insert_at_char(&mut self.content_buffer, current_idx, "~~");
                                                     text_changed = true;
 
                                                     let ccursor =
@@ -731,28 +658,14 @@ impl EditorRenderer {
                                                         ),
                                                     ));
                                                 }
+                                            }
                                             _ => {}
                                         }
 
                                         if let Some(ac) = autoclose_char {
-                                            let mut final_text = String::new();
-                                            final_text.push_str(
-                                                &self
-                                                    .content_buffer
-                                                    .chars()
-                                                    .take(current_idx)
-                                                    .collect::<String>(),
-                                            );
-                                            final_text.push(ac);
-                                            final_text.push_str(
-                                                &self
-                                                    .content_buffer
-                                                    .chars()
-                                                    .skip(current_idx)
-                                                    .collect::<String>(),
-                                            );
-
-                                            self.content_buffer = final_text;
+                                            let mut ac_str = [0u8; 4];
+                                            let ac_str = ac.encode_utf8(&mut ac_str);
+                                            insert_at_char(&mut self.content_buffer, current_idx, ac_str);
                                             text_changed = true;
 
                                             let ccursor = egui::text::CCursor::new(current_idx);
@@ -763,10 +676,8 @@ impl EditorRenderer {
                                     }
                                 }
                             } else if current_idx == prev_idx.saturating_sub(1) && prev_idx > 0 {
-                                let old_chars: Vec<char> = self.previous_text.chars().collect();
-                                let new_chars: Vec<char> = self.content_buffer.chars().collect();
-                                if current_idx < old_chars.len() {
-                                    let deleted_char = old_chars[current_idx];
+                                let old_byte_idx = char_to_byte_idx(&self.previous_text, current_idx);
+                                if let Some(deleted_char) = self.previous_text[old_byte_idx..].chars().next() {
                                     let mut matching_close = None;
                                     match deleted_char {
                                         '(' => matching_close = Some(')'),
@@ -777,34 +688,18 @@ impl EditorRenderer {
                                         '`' => matching_close = Some('`'),
                                         _ => {}
                                     }
+                                    let cur_byte_idx = char_to_byte_idx(&self.content_buffer, current_idx);
                                     if let Some(close_char) = matching_close
-                                        && current_idx < new_chars.len()
-                                            && new_chars[current_idx] == close_char
-                                        {
-                                            let mut final_text = String::new();
-                                            final_text.push_str(
-                                                &self
-                                                    .content_buffer
-                                                    .chars()
-                                                    .take(current_idx)
-                                                    .collect::<String>(),
-                                            );
-                                            final_text.push_str(
-                                                &self
-                                                    .content_buffer
-                                                    .chars()
-                                                    .skip(current_idx + 1)
-                                                    .collect::<String>(),
-                                            );
+                                        && self.content_buffer[cur_byte_idx..].starts_with(close_char)
+                                    {
+                                        remove_at_char(&mut self.content_buffer, current_idx);
+                                        text_changed = true;
 
-                                            self.content_buffer = final_text;
-                                            text_changed = true;
-
-                                            let ccursor = egui::text::CCursor::new(current_idx);
-                                            state.cursor.set_char_range(Some(
-                                                egui::text::CCursorRange::two(ccursor, ccursor),
-                                            ));
-                                        }
+                                        let ccursor = egui::text::CCursor::new(current_idx);
+                                        state.cursor.set_char_range(Some(
+                                            egui::text::CCursorRange::two(ccursor, ccursor),
+                                        ));
+                                    }
                                 }
                             }
                         }
@@ -998,39 +893,28 @@ impl EditorRenderer {
                 if range.primary.index == range.secondary.index {
                     // No selection - single cursor
                     let cursor_idx = range.primary.index;
-                    let chars: Vec<char> = self.content_buffer.chars().collect();
                     
                     if tab_pressed {
-                        let mut new_chars = chars;
-                        let insert_idx = cursor_idx.min(new_chars.len());
-                        for c in spaces.chars().rev() {
-                            new_chars.insert(insert_idx, c);
-                        }
-                        self.content_buffer = new_chars.into_iter().collect();
+                        insert_at_char(&mut self.content_buffer, cursor_idx, &spaces);
                         let new_cursor = cursor_idx + tab_width;
                         let ccursor = egui::text::CCursor::new(new_cursor);
                         text_state.cursor.set_char_range(Some(egui::text::CCursorRange::two(ccursor, ccursor)));
                     } else {
                         // Shift + Tab (unindent current line)
-                        let mut line_start = 0;
-                        for i in (0..cursor_idx.min(chars.len())).rev() {
-                            if chars[i] == '\n' {
-                                line_start = i + 1;
-                                break;
-                            }
-                        }
-                        let mut spaces_to_remove = 0;
-                        for i in 0..tab_width {
-                            if line_start + i < chars.len() && chars[line_start + i] == ' ' {
-                                spaces_to_remove += 1;
-                            } else {
-                                break;
-                            }
-                        }
+                        let cursor_byte = char_to_byte_idx(&self.content_buffer, cursor_idx);
+                        let line_start_byte = self.content_buffer[..cursor_byte].rfind('\n').map_or(0, |idx| idx + 1);
+                        let spaces_to_remove = self.content_buffer[line_start_byte..]
+                            .chars()
+                            .take(tab_width)
+                            .take_while(|&c| c == ' ')
+                            .count();
                         if spaces_to_remove > 0 {
-                            let mut new_chars = chars;
-                            new_chars.drain(line_start..line_start + spaces_to_remove);
-                            self.content_buffer = new_chars.into_iter().collect();
+                            self.content_buffer.drain(line_start_byte..line_start_byte + spaces_to_remove);
+                            let line_start = if self.content_buffer.is_ascii() {
+                                line_start_byte
+                            } else {
+                                self.content_buffer[..line_start_byte].chars().count()
+                            };
                             let new_cursor = if cursor_idx >= line_start + spaces_to_remove {
                                 cursor_idx - spaces_to_remove
                             } else {
@@ -1044,33 +928,30 @@ impl EditorRenderer {
                     // Selection - block indent/unindent
                     let start_idx = range.primary.index.min(range.secondary.index);
                     let end_idx = range.primary.index.max(range.secondary.index);
-                    let chars: Vec<char> = self.content_buffer.chars().collect();
                     
-                    let mut first_line_start = 0;
-                    for i in (0..start_idx.min(chars.len())).rev() {
-                        if chars[i] == '\n' {
-                            first_line_start = i + 1;
-                            break;
-                        }
-                    }
+                    let start_byte = char_to_byte_idx(&self.content_buffer, start_idx);
+                    let first_line_start_byte = self.content_buffer[..start_byte].rfind('\n').map_or(0, |idx| idx + 1);
+                    let first_line_start = if self.content_buffer.is_ascii() {
+                        first_line_start_byte
+                    } else {
+                        self.content_buffer[..first_line_start_byte].chars().count()
+                    };
                     
                     let mut selected_line_starts = vec![first_line_start];
-                    for (i, c) in chars.iter().enumerate().take(end_idx.min(chars.len())).skip(first_line_start) {
-                        if *c == '\n' && i + 1 < end_idx {
-                            selected_line_starts.push(i + 1);
+                    for (cur_char, (_b, c)) in (first_line_start..).zip(self.content_buffer[first_line_start_byte..].char_indices()) {
+                        if cur_char >= end_idx {
+                            break;
+                        }
+                        if c == '\n' && cur_char + 1 < end_idx {
+                            selected_line_starts.push(cur_char + 1);
                         }
                     }
                     
                     if tab_pressed {
-                        let mut new_chars = chars;
-                        let mut added_chars = 0;
                         for &line_start in selected_line_starts.iter().rev() {
-                            for c in spaces.chars().rev() {
-                                new_chars.insert(line_start, c);
-                            }
-                            added_chars += tab_width;
+                            insert_at_char(&mut self.content_buffer, line_start, &spaces);
                         }
-                        self.content_buffer = new_chars.into_iter().collect();
+                        let added_chars = selected_line_starts.len() * tab_width;
                         let new_start = start_idx + tab_width;
                         let new_end = end_idx + added_chars;
                         let (anchor, head) = if range.primary.index >= range.secondary.index {
@@ -1083,27 +964,23 @@ impl EditorRenderer {
                         text_state.cursor.set_char_range(Some(egui::text::CCursorRange::two(c_anchor, c_head)));
                     } else {
                         // Shift + Tab block unindent
-                        let mut new_chars = chars;
                         let mut removed_chars = 0;
                         let mut first_line_removed = 0;
                         for &line_start in selected_line_starts.iter().rev() {
-                            let mut spaces_to_remove = 0;
-                            for i in 0..tab_width {
-                                if line_start + i < new_chars.len() && new_chars[line_start + i] == ' ' {
-                                    spaces_to_remove += 1;
-                                } else {
-                                    break;
-                                }
-                            }
+                            let line_start_byte = char_to_byte_idx(&self.content_buffer, line_start);
+                            let spaces_to_remove = self.content_buffer[line_start_byte..]
+                                .chars()
+                                .take(tab_width)
+                                .take_while(|&c| c == ' ')
+                                .count();
                             if spaces_to_remove > 0 {
-                                new_chars.drain(line_start..line_start + spaces_to_remove);
+                                self.content_buffer.drain(line_start_byte..line_start_byte + spaces_to_remove);
                                 removed_chars += spaces_to_remove;
                                 if line_start == first_line_start {
                                     first_line_removed = spaces_to_remove;
                                 }
                             }
                         }
-                        self.content_buffer = new_chars.into_iter().collect();
                         let new_start = (start_idx as isize - first_line_removed as isize).max(first_line_start as isize) as usize;
                         let new_end = (end_idx as isize - removed_chars as isize).max(new_start as isize) as usize;
                         let (anchor, head) = if range.primary.index >= range.secondary.index {
@@ -1156,12 +1033,11 @@ impl EditorRenderer {
                 && range.primary.index != range.secondary.index {
                     previous_selection = Some(range);
                 }
-        if previous_selection.is_none() {
-            if let Some(r) = editor.selection.range() {
+        if previous_selection.is_none()
+            && let Some(r) = editor.selection.range() {
                 let start = egui::text::CCursor::new(r.start);
                 let end = egui::text::CCursor::new(r.end);
                 previous_selection = Some(egui::text::CCursorRange::two(start, end));
-            }
         }
         let is_right_click = ui.input(|i| i.pointer.secondary_pressed() || i.pointer.secondary_down());
 
@@ -1760,8 +1636,28 @@ fn create_layout_job(
         Color32::from_rgb(140, 140, 140)
     };
 
-    let link_format = TextFormat {
+    let default_format = TextFormat {
         font_id: normal_font.clone(),
+        color: default_color,
+        ..Default::default()
+    };
+    let heading_format = TextFormat {
+        font_id: heading_font,
+        color: header_color,
+        ..Default::default()
+    };
+    let code_format = TextFormat {
+        font_id: normal_font.clone(),
+        color: code_color,
+        ..Default::default()
+    };
+    let blockquote_format = TextFormat {
+        font_id: normal_font.clone(),
+        color: blockquote_color,
+        ..Default::default()
+    };
+    let link_format = TextFormat {
+        font_id: normal_font,
         color: link_color,
         underline: egui::Stroke::new(1.0_f32, link_color),
         ..Default::default()
@@ -1771,31 +1667,24 @@ fn create_layout_job(
     let mut lines = text.split('\n').peekable();
 
     while let Some(line) = lines.next() {
-        let mut line_format = TextFormat {
-            font_id: normal_font.clone(),
-            color: default_color,
-            ..Default::default()
-        };
-
         let trimmed = line.trim();
         let is_fence = trimmed.starts_with("```");
         if is_fence {
             in_code_block = !in_code_block;
-            line_format.color = code_color;
-            job.append(line, 0.0, line_format);
+            job.append(line, 0.0, code_format.clone());
         } else if in_code_block {
-            line_format.color = code_color;
-            job.append(line, 0.0, line_format);
+            job.append(line, 0.0, code_format.clone());
         } else {
-            if trimmed.starts_with('#') {
-                line_format.font_id = heading_font.clone();
-                line_format.color = header_color;
+            let line_format = if trimmed.starts_with('#') {
+                &heading_format
             } else if trimmed.starts_with('>') {
-                line_format.color = blockquote_color;
-            }
+                &blockquote_format
+            } else {
+                &default_format
+            };
 
             if !line.contains('[') {
-                job.append(line, 0.0, line_format);
+                job.append(line, 0.0, line_format.clone());
             } else {
                 let bytes = line.as_bytes();
                 let len = bytes.len();
@@ -1805,29 +1694,26 @@ fn create_layout_job(
                     let mut matched = false;
 
                     // Wiki link: [[path]] or [[path|label]]
-                    if idx + 3 < len && &bytes[idx..idx + 2] == b"[[" {
-                        if let Some(rel_end) = line[idx + 2..].find("]]") {
+                    if idx + 3 < len && &bytes[idx..idx + 2] == b"[["
+                        && let Some(rel_end) = line[idx + 2..].find("]]") {
                             let end_pos = idx + 2 + rel_end + 2;
                             job.append(&line[idx..end_pos], 0.0, link_format.clone());
                             idx = end_pos;
                             matched = true;
-                        }
                     }
 
                     // Standard markdown link: [label](url)
-                    if !matched && bytes[idx] == b'[' {
-                        if let Some(rel_close_bracket) = line[idx + 1..].find(']') {
+                    if !matched && bytes[idx] == b'['
+                        && let Some(rel_close_bracket) = line[idx + 1..].find(']') {
                             let close_bracket = idx + 1 + rel_close_bracket;
-                            if close_bracket + 1 < len && bytes[close_bracket + 1] == b'(' {
-                                if let Some(rel_close_paren) = line[close_bracket + 2..].find(')') {
+                            if close_bracket + 1 < len && bytes[close_bracket + 1] == b'('
+                                && let Some(rel_close_paren) = line[close_bracket + 2..].find(')') {
                                     let close_paren = close_bracket + 2 + rel_close_paren;
                                     let end_pos = close_paren + 1;
                                     job.append(&line[idx..end_pos], 0.0, link_format.clone());
                                     idx = end_pos;
                                     matched = true;
-                                }
                             }
-                        }
                     }
 
                     if matched {
@@ -1845,15 +1731,7 @@ fn create_layout_job(
         }
 
         if lines.peek().is_some() {
-            job.append(
-                "\n",
-                0.0,
-                TextFormat {
-                    font_id: normal_font.clone(),
-                    color: default_color,
-                    ..Default::default()
-                },
-            );
+            job.append("\n", 0.0, default_format.clone());
         }
     }
     job

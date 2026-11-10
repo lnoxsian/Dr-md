@@ -4,8 +4,8 @@ set -e
 # Change directory to the workspace root
 cd "$(dirname "$0")/.."
 
-echo "Building release binary..."
-cargo build --profile release-optimized
+echo "Building optimized binary..."
+cargo build --profile optimized
 
 # Extract version from Cargo.toml
 VERSION=$(grep -E "^version\s*=\s*" Cargo.toml | head -n 1 | cut -d '"' -f 2)
@@ -27,7 +27,7 @@ mkdir -p "$STAGING_DIR/usr/bin"
 mkdir -p "$STAGING_DIR/usr/share/applications"
 
 # Copy binary
-cp target/release-optimized/dr-md "$STAGING_DIR/usr/bin/"
+cp target/optimized/dr-md "$STAGING_DIR/usr/bin/"
 chmod 755 "$STAGING_DIR/usr/bin/dr-md"
 
 # Copy icons of all sizes

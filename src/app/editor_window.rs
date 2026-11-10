@@ -32,22 +32,12 @@ pub fn render_editor_window(ctx: &egui::Context, state: &mut AppState) {
                     let font_size = state.config.font_size;
                     let line_numbers = state.config.line_numbers;
                     let cursor_style = state.config.cursor_style;
-                    let theme = state.config.theme.clone();
+                    let theme = state.config.theme.as_str();
 
                     let mut new_split_ratio = None;
 
                     if let Some(tab) = state.tabs.get_mut(active_idx) {
                         match tab.view_mode {
-                            ViewMode::Editor => {
-                                tab.editor_renderer.show(
-                                    &mut content_ui,
-                                    &mut tab.editor,
-                                    font_size,
-                                    line_numbers,
-                                    cursor_style,
-                                    state.config.tab_width,
-                                );
-                            }
                             ViewMode::Preview => {
                                 state.preview.show(
                                     &mut content_ui,
@@ -55,7 +45,7 @@ pub fn render_editor_window(ctx: &egui::Context, state: &mut AppState) {
                                     &mut tab.editor_renderer,
                                     &tab.path,
                                     font_size,
-                                    &theme,
+                                    theme,
                                     state.config.mirror_mode,
                                     true,
                                     state.config.preview_max_width,
@@ -169,7 +159,7 @@ pub fn render_editor_window(ctx: &egui::Context, state: &mut AppState) {
                                         &mut tab.editor_renderer,
                                         &tab.path,
                                         font_size,
-                                        &theme,
+                                        theme,
                                         state.config.mirror_mode,
                                         false,
                                         state.config.preview_max_width,
@@ -274,7 +264,7 @@ pub fn render_editor_window(ctx: &egui::Context, state: &mut AppState) {
                                         &mut tab.editor_renderer,
                                         &tab.path,
                                         font_size,
-                                        &theme,
+                                        theme,
                                         state.config.mirror_mode,
                                         false,
                                         state.config.preview_max_width,

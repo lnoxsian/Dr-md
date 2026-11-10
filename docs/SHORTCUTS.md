@@ -28,9 +28,9 @@ The app uses the platform command modifier, so `Ctrl` on Linux and Windows maps 
 
 ## Views And Layout
 
-- `Ctrl+1` - Editor mode
+- `Ctrl+1` - Split mode (Editor + Preview)
 - `Ctrl+2` - Preview mode
-- `Ctrl+3` - Split mode
+- `Ctrl+3` - Split mode (alias)
 - `Ctrl+E` - Toggle file explorer
 - `F11` - Toggle focus mode
 
