@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://github.com/lnoxsian/dr-md">
-    <img src="https://raw.githubusercontent.com/lnoxsian/dr-md/main/assets/icons/dr-md.png" alt="dr-md logo" width="200">
+    <img src="https://raw.githubusercontent.com/lnoxsian/dr-md/main/assets/logo/dr-md-logo.png" alt="dr-md logo" width="200">
   </a>
 </p>
 <p align="center">
