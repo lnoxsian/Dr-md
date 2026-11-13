@@ -15,7 +15,6 @@ pub enum ThemeAccent {
     Yellow,
 }
 
-
 impl ThemeAccent {
     pub fn color(&self) -> egui::Color32 {
         match self {
@@ -67,7 +66,6 @@ pub enum CursorStyle {
     Underline,
 }
 
-
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 #[derive(Default)]
@@ -78,20 +76,17 @@ pub enum ViewMode {
     Split,
 }
 
-
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct TabState {
     pub path: String,
     pub view_mode: ViewMode,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[derive(Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct FileState {
     pub last_open_tabs: Vec<TabState>,
     pub last_active_tab: Option<usize>,
 }
-
 
 impl FileState {
     fn get_state_path() -> Option<std::path::PathBuf> {
@@ -115,9 +110,10 @@ impl FileState {
         if let Some(state_path) = Self::get_state_path() {
             if state_path.exists() {
                 if let Ok(content) = std::fs::read_to_string(&state_path)
-                    && let Ok(state) = toml::from_str(&content) {
-                        return state;
-                    }
+                    && let Ok(state) = toml::from_str(&content)
+                {
+                    return state;
+                }
             } else {
                 let default_state = Self::default();
                 let _ = default_state.save();
@@ -353,7 +349,6 @@ fn gruvbox_light_visuals() -> egui::Visuals {
     visuals
 }
 
-
 pub fn apply_theme(ctx: &egui::Context, config: &AppConfig) {
     let mut style = (*ctx.style()).clone();
 
@@ -442,22 +437,23 @@ pub fn setup_fonts(ctx: &egui::Context) {
                 break;
             }
             if std::path::Path::new(path).exists()
-                && let Ok(bytes) = std::fs::read(path) {
-                    let mut font_data = egui::FontData::from_owned(bytes);
-                    // ab_glyph/egui supports loading first face from ttc collections automatically if we set index to 0
-                    font_data.index = 0;
-                    let name = format!("{}_{}", base_name, loaded);
-                    fonts.font_data.insert(name.clone(), font_data);
-                    
-                    // Add as fallback to Proportional and Monospace families
-                    if let Some(family) = fonts.families.get_mut(&egui::FontFamily::Proportional) {
-                        family.push(name.clone());
-                    }
-                    if let Some(family) = fonts.families.get_mut(&egui::FontFamily::Monospace) {
-                        family.push(name.clone());
-                    }
-                    loaded += 1;
+                && let Ok(bytes) = std::fs::read(path)
+            {
+                let mut font_data = egui::FontData::from_owned(bytes);
+                // ab_glyph/egui supports loading first face from ttc collections automatically if we set index to 0
+                font_data.index = 0;
+                let name = format!("{}_{}", base_name, loaded);
+                fonts.font_data.insert(name.clone(), font_data);
+
+                // Add as fallback to Proportional and Monospace families
+                if let Some(family) = fonts.families.get_mut(&egui::FontFamily::Proportional) {
+                    family.push(name.clone());
                 }
+                if let Some(family) = fonts.families.get_mut(&egui::FontFamily::Monospace) {
+                    family.push(name.clone());
+                }
+                loaded += 1;
+            }
         }
         loaded
     };
@@ -543,11 +539,12 @@ impl AppConfig {
         let mut config = if let Some(config_path) = Self::get_config_path() {
             if config_path.exists() {
                 if let Ok(content) = std::fs::read_to_string(&config_path)
-                    && let Ok(config) = toml::from_str(&content) {
-                        config
-                    } else {
-                        Self::default()
-                    }
+                    && let Ok(config) = toml::from_str(&content)
+                {
+                    config
+                } else {
+                    Self::default()
+                }
             } else {
                 let default_config = Self::default();
                 let _ = default_config.save();

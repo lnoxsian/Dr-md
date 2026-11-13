@@ -1,10 +1,12 @@
 pub mod buffer;
+pub mod completion;
 pub mod cursor;
 pub mod renderer;
 pub mod selection;
 pub mod undo;
 
 pub use buffer::EditBuffer;
+pub use completion::WikilinkCompletion;
 pub use cursor::Cursor;
 pub use selection::Selection;
 pub use undo::UndoStack;
@@ -21,6 +23,7 @@ pub struct Editor {
     pub version: usize,
     pub request_table_dialog: bool,
     pub cursor_screen_pos: Option<egui::Pos2>,
+    pub completion: WikilinkCompletion,
 }
 
 impl Editor {
@@ -35,6 +38,7 @@ impl Editor {
             version: 0,
             request_table_dialog: false,
             cursor_screen_pos: None,
+            completion: WikilinkCompletion::new(),
         }
     }
 
@@ -85,7 +89,6 @@ impl Editor {
         self.version += 1;
     }
 
-
     pub fn format_selection(&mut self, format_type: &str) {
         let current_text = self.buffer.to_string();
         self.undo_stack.push(current_text);
@@ -115,7 +118,9 @@ impl Editor {
                         }
                         lines.join("\n")
                     } else {
-                        if selected_text.trim().is_empty() || selected_text.trim().starts_with("- [ ] ") {
+                        if selected_text.trim().is_empty()
+                            || selected_text.trim().starts_with("- [ ] ")
+                        {
                             selected_text
                         } else {
                             format!("- [ ] {}", selected_text)
@@ -292,7 +297,6 @@ impl Editor {
         self.is_dirty = true;
         self.version += 1;
     }
-
 
     pub fn undo(&mut self) {
         let current_text = self.buffer.to_string();

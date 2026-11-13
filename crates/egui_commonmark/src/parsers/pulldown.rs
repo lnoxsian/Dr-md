@@ -9,12 +9,31 @@ use egui::{self, Id, Pos2, TextStyle, Ui, Vec2};
 
 use pulldown_cmark::{CowStr, HeadingLevel, Options};
 
-fn render_math_to_svg(latex: &str, font_size: f32, text_color: egui::Color32) -> Result<String, String> {
-    let formula = ratex_parser::parse(latex)
-        .map_err(|err| format!("RaTeX parse error: {:?}", err))?;
+fn render_math_to_svg(
+    latex: &str,
+    font_size: f32,
+    text_color: egui::Color32,
+) -> Result<String, String> {
+    let formula =
+        ratex_parser::parse(latex).map_err(|err| format!("RaTeX parse error: {:?}", err))?;
     let layout_options = ratex_layout::LayoutOptions::default();
     let layout_box = ratex_layout::layout(&formula, &layout_options);
-    let display_list = ratex_layout::to_display_list(&layout_box);
+    let mut display_list = ratex_layout::to_display_list(&layout_box);
+
+    // Apply Sans-Serif font to math glyphs
+    for item in &mut display_list.items {
+        if let ratex_types::display_item::DisplayItem::GlyphPath { font, .. } = item {
+            match font.as_str() {
+                "Math-Italic" | "Main-Italic" => *font = "SansSerif-Italic".to_string(),
+                "Main-Regular" => *font = "SansSerif-Regular".to_string(),
+                "Main-Bold" | "Math-BoldItalic" | "Main-BoldItalic" => {
+                    *font = "SansSerif-Bold".to_string();
+                }
+                _ => {}
+            }
+        }
+    }
+
     let options = ratex_svg::SvgOptions {
         font_size: font_size as f64,
         padding: (font_size * 0.15) as f64,
@@ -22,7 +41,7 @@ fn render_math_to_svg(latex: &str, font_size: f32, text_color: egui::Color32) ->
         ..Default::default()
     };
     let svg = ratex_svg::render_to_svg(&display_list, &options);
-    
+
     // Replace default black color with the current theme text color to support dark mode
     let color_str = format!(
         "rgba({},{},{},{})",
@@ -36,34 +55,38 @@ fn render_math_to_svg(latex: &str, font_size: f32, text_color: egui::Color32) ->
         .replace("rgb(0,0,0)", &color_str)
         .replace("#000000", &color_str)
         .replace("#000", &color_str);
-    
+
     Ok(svg)
 }
 
 fn encode_math_placeholders(s: &str) -> String {
-    s.chars().map(|c| match c {
-        '\\' => '\u{E000}',
-        '_' => '\u{E001}',
-        '*' => '\u{E002}',
-        '[' => '\u{E003}',
-        ']' => '\u{E004}',
-        '~' => '\u{E005}',
-        '`' => '\u{E006}',
-        _ => c,
-    }).collect()
+    s.chars()
+        .map(|c| match c {
+            '\\' => '\u{E000}',
+            '_' => '\u{E001}',
+            '*' => '\u{E002}',
+            '[' => '\u{E003}',
+            ']' => '\u{E004}',
+            '~' => '\u{E005}',
+            '`' => '\u{E006}',
+            _ => c,
+        })
+        .collect()
 }
 
 fn decode_math_placeholders(s: &str) -> String {
-    s.chars().map(|c| match c {
-        '\u{E000}' => '\\',
-        '\u{E001}' => '_',
-        '\u{E002}' => '*',
-        '\u{E003}' => '[',
-        '\u{E004}' => ']',
-        '\u{E005}' => '~',
-        '\u{E006}' => '`',
-        _ => c,
-    }).collect()
+    s.chars()
+        .map(|c| match c {
+            '\u{E000}' => '\\',
+            '\u{E001}' => '_',
+            '\u{E002}' => '*',
+            '\u{E003}' => '[',
+            '\u{E004}' => ']',
+            '\u{E005}' => '~',
+            '\u{E006}' => '`',
+            _ => c,
+        })
+        .collect()
 }
 
 fn preprocess_math_blocks(input: &str) -> String {
@@ -296,7 +319,7 @@ pub(crate) struct CheckboxClickEvent {
 }
 
 fn merge_math_events_to_cmark<'a>(
-    events: impl Iterator<Item = (pulldown_cmark::Event<'a>, Range<usize>)>
+    events: impl Iterator<Item = (pulldown_cmark::Event<'a>, Range<usize>)>,
 ) -> Vec<(pulldown_cmark::Event<'a>, Range<usize>)> {
     let mut merged = Vec::new();
     let mut iter = events.peekable();
@@ -775,20 +798,10 @@ impl CommonMarkViewerInternal {
                     .id_source(id)
                     .max_width(max_width)
                     .show(ui, |ui| {
-                        egui::Grid::new(id.with("grid")).striped(true).show(ui, |ui| {
-                            for col in header {
-                                ui.horizontal(|ui| {
-                                    for (e, src_span) in col {
-                                        self.should_insert_newline = false;
-                                        self.event(ui, e, src_span, cache, options, max_width);
-                                    }
-                                });
-                            }
-
-                            ui.end_row();
-
-                            for row in rows {
-                                for col in row {
+                        egui::Grid::new(id.with("grid"))
+                            .striped(true)
+                            .show(ui, |ui| {
+                                for col in header {
                                     ui.horizontal(|ui| {
                                         for (e, src_span) in col {
                                             self.should_insert_newline = false;
@@ -798,8 +811,22 @@ impl CommonMarkViewerInternal {
                                 }
 
                                 ui.end_row();
-                            }
-                        });
+
+                                for row in rows {
+                                    for col in row {
+                                        ui.horizontal(|ui| {
+                                            for (e, src_span) in col {
+                                                self.should_insert_newline = false;
+                                                self.event(
+                                                    ui, e, src_span, cache, options, max_width,
+                                                );
+                                            }
+                                        });
+                                    }
+
+                                    ui.end_row();
+                                }
+                            });
                     });
             });
 
@@ -886,13 +913,17 @@ impl CommonMarkViewerInternal {
                 }
                 MathSegment::InlineMath(m) => {
                     let decoded_m = decode_math_placeholders(m);
-                    let font_size = ui.style().text_styles.get(&egui::TextStyle::Body).map_or(14.0, |d| d.size);
+                    let font_size = ui
+                        .style()
+                        .text_styles
+                        .get(&egui::TextStyle::Body)
+                        .map_or(14.0, |d| d.size);
                     let text_color = if ui.visuals().dark_mode {
                         egui::Color32::WHITE
                     } else {
                         ui.visuals().text_color()
                     };
-                    
+
                     // Create a unique hash for the LaTeX content, font size, and text color
                     let mut hasher = std::collections::hash_map::DefaultHasher::new();
                     use std::hash::Hash;
@@ -901,9 +932,9 @@ impl CommonMarkViewerInternal {
                     (font_size as u32).hash(&mut hasher);
                     text_color.hash(&mut hasher);
                     let hash = hasher.finish();
-                    
+
                     let uri = format!("bytes://math_{}.svg", hash);
-                    
+
                     // Get or compile SVG bytes
                     let bytes = cache.math_cache.entry(hash).or_insert_with(|| {
                         match render_math_to_svg(&decoded_m, font_size, text_color) {
@@ -911,7 +942,7 @@ impl CommonMarkViewerInternal {
                             Err(_) => Vec::new(),
                         }
                     });
-                    
+
                     if !bytes.is_empty() {
                         let image = egui::Image::from_bytes(uri, bytes.clone())
                             .fit_to_original_size(1.0)
@@ -932,13 +963,18 @@ impl CommonMarkViewerInternal {
                 }
                 MathSegment::DisplayMath(m) => {
                     let decoded_m = decode_math_placeholders(m);
-                    let font_size = ui.style().text_styles.get(&egui::TextStyle::Body).map_or(14.0, |d| d.size) * 1.2;
+                    let font_size = ui
+                        .style()
+                        .text_styles
+                        .get(&egui::TextStyle::Body)
+                        .map_or(14.0, |d| d.size)
+                        * 1.2;
                     let text_color = if ui.visuals().dark_mode {
                         egui::Color32::WHITE
                     } else {
                         ui.visuals().text_color()
                     };
-                    
+
                     let mut hasher = std::collections::hash_map::DefaultHasher::new();
                     use std::hash::Hash;
                     use std::hash::Hasher;
@@ -946,16 +982,16 @@ impl CommonMarkViewerInternal {
                     (font_size as u32).hash(&mut hasher);
                     text_color.hash(&mut hasher);
                     let hash = hasher.finish();
-                    
+
                     let uri = format!("bytes://math_{}.svg", hash);
-                    
+
                     let bytes = cache.math_cache.entry(hash).or_insert_with(|| {
                         match render_math_to_svg(&decoded_m, font_size, text_color) {
                             Ok(svg_string) => svg_string.into_bytes(),
                             Err(_) => Vec::new(),
                         }
                     });
-                    
+
                     if !bytes.is_empty() {
                         if self.should_insert_newline {
                             newline(ui);
@@ -975,7 +1011,8 @@ impl CommonMarkViewerInternal {
                         }
                         ui.horizontal(|ui| {
                             ui.label("    ");
-                            let mut rich_text = self.text_style.to_richtext(ui, &decoded_m).monospace();
+                            let mut rich_text =
+                                self.text_style.to_richtext(ui, &decoded_m).monospace();
                             if ui.visuals().dark_mode {
                                 rich_text = rich_text.color(egui::Color32::WHITE);
                             }
@@ -1154,7 +1191,7 @@ mod tests {
     fn test_parse_math_segments() {
         let segments = parse_math_segments("Hello $x^2$ world $$y = mx + b$$ end");
         assert_eq!(segments.len(), 5);
-        
+
         match &segments[0] {
             MathSegment::Text(t) => assert_eq!(*t, "Hello "),
             _ => panic!("Expected text"),
@@ -1176,8 +1213,6 @@ mod tests {
             _ => panic!("Expected text"),
         }
     }
-
-
 
     #[test]
     fn test_multiline_inline_math_rejection() {
@@ -1218,6 +1253,37 @@ $$
     }
 
     #[test]
+    fn test_sans_serif_math() {
+        let latex = r"E = mc^2";
+        let formula = ratex_parser::parse(latex).unwrap();
+        let layout_options = ratex_layout::LayoutOptions::default();
+        let layout_box = ratex_layout::layout(&formula, &layout_options);
+        let mut display_list = ratex_layout::to_display_list(&layout_box);
+        for item in &mut display_list.items {
+            if let ratex_types::display_item::DisplayItem::GlyphPath { font, .. } = item {
+                match font.as_str() {
+                    "Math-Italic" | "Main-Italic" => *font = "SansSerif-Italic".to_string(),
+                    "Main-Regular" => *font = "SansSerif-Regular".to_string(),
+                    "Main-Bold" | "Math-BoldItalic" | "Main-BoldItalic" => {
+                        *font = "SansSerif-Bold".to_string()
+                    }
+                    _ => {}
+                }
+            }
+        }
+        let options = ratex_svg::SvgOptions {
+            font_size: 14.0,
+            padding: 2.0,
+            embed_glyphs: true,
+            ..Default::default()
+        };
+        let svg = ratex_svg::render_to_svg(&display_list, &options);
+        assert!(svg.contains("<svg"));
+        assert!(svg.contains("<path"));
+        eprintln!("SVG generated successfully! Length = {}", svg.len());
+    }
+
+    #[test]
     fn test_math_dark_mode_white_symbols() {
         let latex = r"E = mc^2";
         let svg = render_math_to_svg(latex, 14.0, egui::Color32::WHITE).unwrap();
@@ -1252,14 +1318,12 @@ $$
                 println!("Text Event: {:?}", t);
                 let segments = parse_math_segments(&t);
                 for seg in segments {
-                    match seg {
-                        MathSegment::DisplayMath(m) => {
-                            let decoded_m = decode_math_placeholders(m);
-                            println!("Display Math: {:?}", decoded_m);
-                            let svg = render_math_to_svg(&decoded_m, 14.0, egui::Color32::BLACK).unwrap();
-                            println!("SVG:\n{}", svg);
-                        }
-                        _ => {}
+                    if let MathSegment::DisplayMath(m) = seg {
+                        let decoded_m = decode_math_placeholders(m);
+                        println!("Display Math: {:?}", decoded_m);
+                        let svg =
+                            render_math_to_svg(&decoded_m, 14.0, egui::Color32::BLACK).unwrap();
+                        println!("SVG:\n{}", svg);
                     }
                 }
             }
@@ -1289,17 +1353,14 @@ $$
                 println!("Text Event: {:?}", t);
                 let segments = parse_math_segments(&t);
                 for seg in segments {
-                    match seg {
-                        MathSegment::InlineMath(m) => {
-                            let decoded_m = decode_math_placeholders(m);
-                            println!("Inline Math: {:?}", decoded_m);
-                            let svg = render_math_to_svg(&decoded_m, 14.0, egui::Color32::BLACK);
-                            println!("SVG Result: {:?}", svg.is_ok());
-                            if let Err(e) = svg {
-                                println!("SVG Error: {}", e);
-                            }
+                    if let MathSegment::InlineMath(m) = seg {
+                        let decoded_m = decode_math_placeholders(m);
+                        println!("Inline Math: {:?}", decoded_m);
+                        let svg = render_math_to_svg(&decoded_m, 14.0, egui::Color32::BLACK);
+                        println!("SVG Result: {:?}", svg.is_ok());
+                        if let Err(e) = svg {
+                            println!("SVG Error: {}", e);
                         }
-                        _ => {}
                     }
                 }
             }

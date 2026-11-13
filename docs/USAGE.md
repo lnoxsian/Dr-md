@@ -43,11 +43,54 @@ Folder-level actions are available from the empty space at the bottom of the tre
 
 The preview is rendered through `egui_commonmark`. Task list items are interactive, and checkbox toggles are written back into the note content.
 
-The app also preprocesses wiki-style links before rendering preview output.
+Dr-md provides full Obsidian-compatible wikilink and embed support:
 
-The preview cache updates only when the editor version changes, which keeps live rendering responsive while you type.
+- **Note Links**: `[[note]]` or `[[path/to/note]]`
+- **Aliases**: `[[note|display alias]]`
+- **Headings**: `[[note#Heading]]` or `[[#Heading]]` (links to headings in the current note). Supports GitHub/Obsidian slugified anchors, case insensitivity, Unicode, and duplicate headings (`#heading-1`).
+- **Block References**: `[[note^block-id]]` or `[[^block-id]]` (links to lines ending with `^block-id`).
+- **Markdown Embeds**: `![[note]]`, `![[note#Heading]]`, and `![[note^block-id]]` render referenced notes, sections, or blocks inline with recursion cycle detection.
+- **Image & Media Embeds**: `![[image.png]]`, `![[image.png|300]]`, `![[document.pdf]]`, and audio/video files. Unsupported files and missing notes display fallback cards.
+- **Autocompletion**: Typing `[[` inside the editor opens a completion popup with vault note, heading, and block suggestions. Navigate with `Up`/`Down`, confirm with `Enter`/`Tab`, or dismiss with `Escape`.
+- **Unresolved Links**: Clicking an unresolved note link automatically creates the target note within the vault and opens it in an editor tab.
+
+The preview cache updates only when the editor version changes, which keeps live rendering responsive while you type. Checkbox toggles write back losslessly even when note embeds are present.
 
 Formatting helpers in the Edit menu and shortcuts cover bold, italic, links, code blocks, checkboxes, comments, numbered lists, bulleted lists, and blockquotes.
+
+## Unified Vault Search
+
+Dr-md provides a unified search engine accessible via `Ctrl+P` (or `Ctrl+Shift+F`) and menu items, seamlessly combining filename and full-content vault search into a single fast interface.
+
+When search is active, it replaces the explorer file tree. Press `Escape` or `Ctrl+P` to return to the normal file tree view at any time.
+
+### Query Syntax & Features
+
+- **Automatic Regex Detection**: Regular expressions are automatically detected and active whenever regex syntax is used (such as `\d+`, `foo.*bar`, `cat|dog`, `^# `, or slash literals `/pattern/`). Non-regex queries run as fast substring searches.
+- **Case-Insensitive & Partial Matching**: Searches are case-insensitive and match partial words by default.
+- **Plain Text**: `rust performance` requires both terms to appear in the note (AND semantics).
+- **Exact Phrases**: `"exact match phrase"` requires the contiguous phrase.
+- **Path Filter**: `path:folder/sub` restricts matches to notes inside that relative folder path.
+- **File Filter**: `file:name` restricts matches to notes whose filename contains `name`.
+- **Tag Filter**: `tag:#project` or `tag:project` matches both frontmatter `tags:` and inline `#tag` tokens.
+- **Line Filter**: `line:needle` restricts matches to lines containing `needle`.
+- **Operator Overrides**: Advanced users can still explicitly force case or regex with `case:true` or `regex:false`.
+
+### Navigation & Jump to Match
+
+- Results are streamed live from a background worker thread and grouped by file with line numbers and highlighted match snippets.
+- Use `ArrowDown` / `ArrowUp` to navigate search results via keyboard.
+- Press `Enter` or click a match to open the note in an editor tab, position the cursor, select the matched text, and center the viewport on the matching line.
+- Press `Escape` or click `🗙` to clear the search query.
+
+### Performance & Limits
+
+- File scanning and indexing run off the UI thread; input is debounced at 150ms.
+- Superseded searches are cancelled immediately via an atomic generation counter.
+- The compact index caches metadata (`mtime`, size, headings, tags) without storing full note contents in memory.
+- Searches are confined strictly to the vault root; symlinks escaping the vault and circular directory links are safely dropped.
+- Dotfiles (`.git`, `.obsidian`, etc.) and build directories (`target`, `node_modules`, `dist`, `build`) are ignored.
+- Matches are bounded at 5,000 total results and 100 matches per file to avoid resource exhaustion on massive vaults.
 
 ## Shortcuts
 

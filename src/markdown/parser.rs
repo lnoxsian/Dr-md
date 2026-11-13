@@ -1,52 +1,25 @@
-pub fn preprocess_wiki_links(content: &str) -> String {
-    if !content.contains("[[") {
-        return content.to_string();
-    }
+use std::path::Path;
 
-    let mut result = String::with_capacity(content.len());
-    let mut chars = content.chars().peekable();
-    while let Some(c) = chars.next() {
-        if c == '[' && chars.peek() == Some(&'[') {
-            chars.next(); // consume second '['
-            let mut link = String::new();
-            let mut found = false;
-            while let Some(&nc) = chars.peek() {
-                if nc == ']' {
-                    chars.next();
-                    if chars.peek() == Some(&']') {
-                        chars.next(); // consume second ']'
-                        found = true;
-                        break;
-                    } else {
-                        link.push(']');
-                    }
-                } else {
-                    link.push(chars.next().unwrap());
-                }
-            }
-            if found {
-                result.push('[');
-                if let Some(pipe_pos) = link.find('|') {
-                    let path = &link[..pipe_pos];
-                    let label = &link[pipe_pos + 1..];
-                    result.push_str(label);
-                    result.push_str("](");
-                    result.push_str(path);
-                } else {
-                    result.push_str(&link);
-                    result.push_str("](");
-                    result.push_str(&link);
-                }
-                result.push_str(".md)");
-            } else {
-                result.push_str("[[");
-                result.push_str(&link);
-            }
-        } else {
-            result.push(c);
-        }
-    }
-    result
+#[allow(dead_code)]
+pub fn preprocess_wiki_links(content: &str) -> String {
+    preprocess_wiki_links_with_context(content, None, None)
+}
+
+#[allow(dead_code)]
+pub fn preprocess_wiki_links_with_context(
+    content: &str,
+    current_file: Option<&Path>,
+    vault_root: Option<&Path>,
+) -> String {
+    let mut call_stack = Vec::new();
+    super::wikilink::preprocess_markdown_with_embeds(
+        content,
+        current_file,
+        vault_root,
+        &mut call_stack,
+        0,
+    )
+    .text
 }
 
 #[cfg(test)]

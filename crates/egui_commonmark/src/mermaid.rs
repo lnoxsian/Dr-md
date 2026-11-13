@@ -1,6 +1,6 @@
+use egui::{Image, Ui};
 use std::hash::{Hash, Hasher};
 use std::sync::OnceLock;
-use egui::{Ui, Image};
 
 static DARK_RENDERER: OnceLock<merman::render::HeadlessRenderer> = OnceLock::new();
 static LIGHT_RENDERER: OnceLock<merman::render::HeadlessRenderer> = OnceLock::new();
@@ -41,7 +41,12 @@ pub(crate) enum MermaidCacheEntry {
 
 /// Renders a Mermaid diagram into the UI.
 /// Rendering is performed asynchronously in a background thread to prevent UI freezing.
-pub fn render_mermaid(ui: &mut Ui, cache: &mut crate::CommonMarkCache, content: &str, max_width: f32) -> Result<(), String> {
+pub fn render_mermaid(
+    ui: &mut Ui,
+    cache: &mut crate::CommonMarkCache,
+    content: &str,
+    max_width: f32,
+) -> Result<(), String> {
     // Generate unique, deterministic cache key based on content and dark mode state.
     let dark_mode = ui.visuals().dark_mode;
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
@@ -91,8 +96,7 @@ pub fn render_mermaid(ui: &mut Ui, cache: &mut crate::CommonMarkCache, content: 
                 .max_width(max_width)
                 .sense(egui::Sense::click());
 
-            let response = ui.add(image)
-                .on_hover_text("Preview diagram");
+            let response = ui.add(image).on_hover_text("Preview diagram");
 
             if response.clicked() {
                 cache.zoomed_image_request = Some((uri, bytes));
@@ -104,7 +108,11 @@ pub fn render_mermaid(ui: &mut Ui, cache: &mut crate::CommonMarkCache, content: 
     }
 }
 
-fn render_mermaid_sync(content: &str, dark_mode: bool, hash: u64) -> Result<(String, Vec<u8>), String> {
+fn render_mermaid_sync(
+    content: &str,
+    dark_mode: bool,
+    hash: u64,
+) -> Result<(String, Vec<u8>), String> {
     let renderer = get_renderer(dark_mode);
 
     let png_bytes = renderer

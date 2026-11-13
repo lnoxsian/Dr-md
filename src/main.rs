@@ -1,5 +1,3 @@
-
-
 #[cfg(not(target_env = "msvc"))]
 #[global_allocator]
 static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
@@ -10,6 +8,7 @@ mod editor;
 mod explorer;
 mod keymap;
 mod markdown;
+pub mod search;
 mod workspace;
 
 use app::DoctorMarkdownApp;
@@ -58,4 +57,3 @@ fn main() -> eframe::Result<()> {
         Box::new(|cc| Box::new(DoctorMarkdownApp::new(cc, None))),
     )
 }
-

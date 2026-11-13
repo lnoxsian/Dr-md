@@ -210,47 +210,44 @@ pub fn render_tab_bar(ui: &mut egui::Ui, state: &mut AppState) {
                                     press_origin.is_some_and(|pos| close_rect.contains(pos));
 
                                 if !is_drag_on_close
-                                    && let Some(mouse_pos) = ui.input(|i| i.pointer.hover_pos()) {
-                                        let mut target_idx = None;
+                                    && let Some(mouse_pos) = ui.input(|i| i.pointer.hover_pos())
+                                {
+                                    let mut target_idx = None;
 
-                                        // Check right neighbor (dragging right)
-                                        if idx + 1 < state.tabs.len() {
-                                            let other_idx = idx + 1;
-                                            let other_path = &state.tabs[other_idx].path;
-                                            let other_id = ui.id().with(other_path);
-                                            let other_rect = ui
-                                                .memory(|mem| {
-                                                    mem.data.get_temp::<egui::Rect>(other_id)
-                                                })
-                                                .unwrap_or(egui::Rect::NOTHING);
-                                            if other_rect != egui::Rect::NOTHING
-                                                && mouse_pos.x > other_rect.center().x
-                                            {
-                                                target_idx = Some(other_idx);
-                                            }
-                                        }
-
-                                        // Check left neighbor (dragging left)
-                                        if target_idx.is_none() && idx > 0 {
-                                            let other_idx = idx - 1;
-                                            let other_path = &state.tabs[other_idx].path;
-                                            let other_id = ui.id().with(other_path);
-                                            let other_rect = ui
-                                                .memory(|mem| {
-                                                    mem.data.get_temp::<egui::Rect>(other_id)
-                                                })
-                                                .unwrap_or(egui::Rect::NOTHING);
-                                            if other_rect != egui::Rect::NOTHING
-                                                && mouse_pos.x < other_rect.center().x
-                                            {
-                                                target_idx = Some(other_idx);
-                                            }
-                                        }
-
-                                        if let Some(other_idx) = target_idx {
-                                            tab_to_swap = Some((idx, other_idx));
+                                    // Check right neighbor (dragging right)
+                                    if idx + 1 < state.tabs.len() {
+                                        let other_idx = idx + 1;
+                                        let other_path = &state.tabs[other_idx].path;
+                                        let other_id = ui.id().with(other_path);
+                                        let other_rect = ui
+                                            .memory(|mem| mem.data.get_temp::<egui::Rect>(other_id))
+                                            .unwrap_or(egui::Rect::NOTHING);
+                                        if other_rect != egui::Rect::NOTHING
+                                            && mouse_pos.x > other_rect.center().x
+                                        {
+                                            target_idx = Some(other_idx);
                                         }
                                     }
+
+                                    // Check left neighbor (dragging left)
+                                    if target_idx.is_none() && idx > 0 {
+                                        let other_idx = idx - 1;
+                                        let other_path = &state.tabs[other_idx].path;
+                                        let other_id = ui.id().with(other_path);
+                                        let other_rect = ui
+                                            .memory(|mem| mem.data.get_temp::<egui::Rect>(other_id))
+                                            .unwrap_or(egui::Rect::NOTHING);
+                                        if other_rect != egui::Rect::NOTHING
+                                            && mouse_pos.x < other_rect.center().x
+                                        {
+                                            target_idx = Some(other_idx);
+                                        }
+                                    }
+
+                                    if let Some(other_idx) = target_idx {
+                                        tab_to_swap = Some((idx, other_idx));
+                                    }
+                                }
                             } else if response.hovered() {
                                 ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::PointingHand);
                             }
@@ -258,22 +255,24 @@ pub fn render_tab_bar(ui: &mut egui::Ui, state: &mut AppState) {
                             // Switch/close tab on click/press (excluding close button area)
                             if ui.input(|i| i.pointer.button_pressed(egui::PointerButton::Primary))
                                 && let Some(press_pos) = ui.input(|i| i.pointer.press_origin())
-                                    && new_tab_rect.contains(press_pos)
-                                        && !close_rect.contains(press_pos)
-                                    {
-                                        tab_to_switch = Some(idx);
-                                    }
+                                && new_tab_rect.contains(press_pos)
+                                && !close_rect.contains(press_pos)
+                            {
+                                tab_to_switch = Some(idx);
+                            }
                             // Close button click check
                             if ui.input(|i| i.pointer.button_clicked(egui::PointerButton::Primary))
                                 && let Some(click_pos) = ui.input(|i| i.pointer.interact_pos())
-                                    && close_rect.contains(click_pos) {
-                                        tab_to_close = Some(idx);
-                                    }
+                                && close_rect.contains(click_pos)
+                            {
+                                tab_to_close = Some(idx);
+                            }
                             if ui.input(|i| i.pointer.button_pressed(egui::PointerButton::Middle))
                                 && let Some(press_pos) = ui.input(|i| i.pointer.press_origin())
-                                    && new_tab_rect.contains(press_pos) {
-                                        tab_to_close = Some(idx);
-                                    }
+                                && new_tab_rect.contains(press_pos)
+                            {
+                                tab_to_close = Some(idx);
+                            }
                         }
 
                         if let Some(idx) = tab_to_close {
@@ -296,7 +295,9 @@ pub fn render_tab_bar(ui: &mut egui::Ui, state: &mut AppState) {
 
     let scroll_delta = ui.input(|i| i.raw_scroll_delta);
     if ui.rect_contains_pointer(inner_res.response.rect) && scroll_delta.y != 0.0 {
-        if (state.tab_scroll_accum > 0.0 && scroll_delta.y < 0.0) || (state.tab_scroll_accum < 0.0 && scroll_delta.y > 0.0) {
+        if (state.tab_scroll_accum > 0.0 && scroll_delta.y < 0.0)
+            || (state.tab_scroll_accum < 0.0 && scroll_delta.y > 0.0)
+        {
             state.tab_scroll_accum = 0.0;
         }
 
@@ -325,10 +326,9 @@ pub fn render_tab_bar(ui: &mut egui::Ui, state: &mut AppState) {
             }
         }
 
-        if switched
-            && let Some(idx) = new_active_idx {
-                state.switch_tab(idx);
-            }
+        if switched && let Some(idx) = new_active_idx {
+            state.switch_tab(idx);
+        }
     } else if state.tab_scroll_accum != 0.0 {
         state.tab_scroll_accum *= 0.8;
         if state.tab_scroll_accum.abs() < 1.0 {

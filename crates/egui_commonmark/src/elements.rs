@@ -85,6 +85,14 @@ pub fn code_block<'t>(
     let effective_width = max_width.min(ui.available_width());
     let mut text = text.trim_end_matches(['\r', '\n']);
 
+    let spacing = ui.style().spacing.clone();
+    let font_id = egui::TextStyle::Small.resolve(ui.style());
+    let sample_galley =
+        ui.painter()
+            .layout_no_wrap("CC".to_owned(), font_id.clone(), ui.visuals().text_color());
+    let button_width = (sample_galley.size().x + spacing.button_padding.x * 2.0).max(30.0);
+    let right_padding = button_width + 12.0;
+
     // To manually add background color to the code block, we imitate what
     // TextEdit does internally
     let where_to_put_background = ui.painter().add(egui::Shape::Noop);
@@ -95,6 +103,12 @@ pub fn code_block<'t>(
     let output = egui::TextEdit::multiline(&mut text)
         .layouter(layouter)
         .desired_width(effective_width)
+        .margin(egui::Margin {
+            left: 6.0,
+            right: right_padding,
+            top: 6.0,
+            bottom: 6.0,
+        })
         // prevent trailing lines
         .desired_rows(1)
         .show(ui);
@@ -136,27 +150,22 @@ pub fn code_block<'t>(
 
     let button_text = if copied_icon { "OK" } else { "CC" };
     let font_id = egui::TextStyle::Small.resolve(ui.style());
-    let galley = ui.painter().layout_no_wrap(
-        button_text.to_owned(),
-        font_id,
-        ui.visuals().text_color(),
-    );
+    let galley =
+        ui.painter()
+            .layout_no_wrap(button_text.to_owned(), font_id, ui.visuals().text_color());
     let text_size = galley.size();
 
     let button_width = (text_size.x + spacing.button_padding.x * 2.0).max(30.0);
     let button_height = (text_size.y + spacing.button_padding.y * 2.0).max(16.0);
 
-    let bottom_padding = 5.0;
+    let top_padding = 5.0;
     let position_y = if frame_rect.height() < 40.0 {
         frame_rect.top() + (frame_rect.height() - button_height) / 2.0
     } else {
-        frame_rect.bottom() - button_height - bottom_padding
+        frame_rect.top() + top_padding
     };
 
-    let position = egui::pos2(
-        frame_rect.right_bottom().x - button_width - 5.0,
-        position_y,
-    );
+    let position = egui::pos2(frame_rect.right_top().x - button_width - 5.0, position_y);
 
     let copy_button = ui
         .put(

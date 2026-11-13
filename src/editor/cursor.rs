@@ -2,4 +2,3 @@
 pub struct Cursor {
     pub char_idx: usize,
 }
-

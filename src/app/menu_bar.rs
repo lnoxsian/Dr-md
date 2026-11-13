@@ -7,9 +7,7 @@ fn menu_item(
     label: &str,
     shortcut: impl Into<egui::WidgetText>,
 ) -> egui::Response {
-    let button = egui::Button::new(label)
-        .shortcut_text(shortcut)
-        .wrap(false);
+    let button = egui::Button::new(label).shortcut_text(shortcut).wrap(false);
     ui.add(button)
 }
 
@@ -20,9 +18,7 @@ fn menu_item_enabled(
     label: &str,
     shortcut: impl Into<egui::WidgetText>,
 ) -> egui::Response {
-    let button = egui::Button::new(label)
-        .shortcut_text(shortcut)
-        .wrap(false);
+    let button = egui::Button::new(label).shortcut_text(shortcut).wrap(false);
     ui.add_enabled(enabled, button)
 }
 
@@ -38,10 +34,8 @@ fn menu_checkbox(
         let mut response = ui.checkbox(checked, label);
         if !shortcut_widget.is_empty() {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                let shortcut_resp = ui.add(
-                    egui::Label::new(shortcut_widget)
-                        .sense(egui::Sense::click()),
-                );
+                let shortcut_resp =
+                    ui.add(egui::Label::new(shortcut_widget).sense(egui::Sense::click()));
                 if shortcut_resp.clicked() {
                     *checked = !*checked;
                     response.mark_changed();
@@ -259,6 +253,12 @@ pub fn render_menu_bar(ctx: &egui::Context, state: &mut AppState) {
                         }
                         ui.close_menu();
                     }
+                    if menu_item(ui, "Search Files & Content", "Ctrl+P").clicked() {
+                        state.explorer_visible = true;
+                        state.search_active = true;
+                        state.search_controller.focus_input = true;
+                        ui.close_menu();
+                    }
                     ui.separator();
                     // Formatting
                     if menu_item(ui, "Bold", "Ctrl+B").clicked() {
@@ -343,27 +343,27 @@ pub fn render_menu_bar(ctx: &egui::Context, state: &mut AppState) {
 
                     ui.add_enabled_ui(has_active_tab, |ui| {
                         let mut is_split = current_view_mode == Some(ViewMode::Split);
-                        if menu_checkbox(ui, &mut is_split, "Split", "Ctrl+1").changed() {
-                            if let Some(tab) = state.active_tab_mut() {
-                                tab.view_mode = if is_split {
-                                    ViewMode::Split
-                                } else {
-                                    ViewMode::Preview
-                                };
-                                state.sync_session_state();
-                            }
+                        if menu_checkbox(ui, &mut is_split, "Split", "Ctrl+1").changed()
+                            && let Some(tab) = state.active_tab_mut()
+                        {
+                            tab.view_mode = if is_split {
+                                ViewMode::Split
+                            } else {
+                                ViewMode::Preview
+                            };
+                            state.sync_session_state();
                         }
 
                         let mut is_preview = current_view_mode == Some(ViewMode::Preview);
-                        if menu_checkbox(ui, &mut is_preview, "Preview", "Ctrl+2").changed() {
-                            if let Some(tab) = state.active_tab_mut() {
-                                tab.view_mode = if is_preview {
-                                    ViewMode::Preview
-                                } else {
-                                    ViewMode::Split
-                                };
-                                state.sync_session_state();
-                            }
+                        if menu_checkbox(ui, &mut is_preview, "Preview", "Ctrl+2").changed()
+                            && let Some(tab) = state.active_tab_mut()
+                        {
+                            tab.view_mode = if is_preview {
+                                ViewMode::Preview
+                            } else {
+                                ViewMode::Split
+                            };
+                            state.sync_session_state();
                         }
                     });
                     ui.separator();
@@ -376,9 +376,10 @@ pub fn render_menu_bar(ctx: &egui::Context, state: &mut AppState) {
                 ui.menu_button("Navigate", |ui| {
                     ui.set_min_width(240.0);
                     ui.style_mut().wrap = Some(false);
-                    if menu_item(ui, "Search Files", "Ctrl+P").clicked() {
+                    if menu_item(ui, "Search Files & Content", "Ctrl+P").clicked() {
                         state.explorer_visible = true;
-                        state.explorer.toggle_search();
+                        state.search_active = true;
+                        state.search_controller.focus_input = true;
                         ui.close_menu();
                     }
                     ui.separator();

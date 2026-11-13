@@ -3,6 +3,7 @@ use crate::config::{AppConfig, FileState};
 use crate::editor::{Editor, renderer::EditorRenderer};
 use crate::explorer::FileTree;
 use crate::markdown::MarkdownPreview;
+use crate::search::SearchController;
 use crate::workspace::Vault;
 use std::path::PathBuf;
 
@@ -36,6 +37,8 @@ pub struct AppState {
     pub insert_table_dialog_pos: Option<egui::Pos2>,
     pub tab_scroll_accum: f32,
     pub last_active_tab_index: Option<usize>,
+    pub search_active: bool,
+    pub search_controller: SearchController,
 }
 
 impl AppState {
@@ -67,6 +70,8 @@ impl AppState {
             insert_table_dialog_pos: None,
             tab_scroll_accum: 0.0,
             last_active_tab_index: None,
+            search_active: false,
+            search_controller: SearchController::new(),
         };
 
         if state.config.reopen_last_files {
@@ -82,9 +87,10 @@ impl AppState {
                 }
             }
             if let Some(active_idx) = last_active
-                && active_idx < state.tabs.len() {
-                    state.switch_tab_inner(active_idx);
-                }
+                && active_idx < state.tabs.len()
+            {
+                state.switch_tab_inner(active_idx);
+            }
         }
 
         state
@@ -226,57 +232,60 @@ impl AppState {
         let id = self.editor_id();
         if let Some(tab) = self.active_tab_mut()
             && let Some(text_state) = egui::widgets::text_edit::TextEditState::load(ctx, id)
-                && let Some(range) = text_state.cursor.char_range() {
-                    tab.editor.cursor.char_idx = range.primary.index;
-                    tab.editor.selection.anchor = range.secondary.index;
-                    tab.editor.selection.head = range.primary.index;
-                }
+            && let Some(range) = text_state.cursor.char_range()
+        {
+            tab.editor.cursor.char_idx = range.primary.index;
+            tab.editor.selection.anchor = range.secondary.index;
+            tab.editor.selection.head = range.primary.index;
+        }
     }
 
     pub fn check_autosave(&mut self, ctx: &egui::Context) {
         if self.session_dirty
-            && let Some(change_time) = self.last_session_change_time {
-                if change_time.elapsed() >= std::time::Duration::from_secs(1) {
-                    let _ = self.file_state.save();
-                    let _ = self.config.save();
-                    self.session_dirty = false;
-                    self.last_session_change_time = None;
+            && let Some(change_time) = self.last_session_change_time
+        {
+            if change_time.elapsed() >= std::time::Duration::from_secs(1) {
+                let _ = self.file_state.save();
+                let _ = self.config.save();
+                self.session_dirty = false;
+                self.last_session_change_time = None;
+            } else {
+                ctx.request_repaint_after(std::time::Duration::from_millis(500));
+            }
+        }
+
+        if self.config.autosave
+            && let Some(idx) = self.active_tab_index
+        {
+            let is_dirty_and_has_path = self
+                .tabs
+                .get(idx)
+                .map(|tab| tab.editor.is_dirty && tab.editor.active_path.is_some())
+                .unwrap_or(false);
+
+            if is_dirty_and_has_path {
+                let current_version = self.tabs[idx].editor.version;
+                if self.last_editor_version != current_version {
+                    self.last_editor_version = current_version;
+                    self.last_edit_time = Some(std::time::Instant::now());
+                }
+
+                let elapsed = self
+                    .last_edit_time
+                    .get_or_insert_with(std::time::Instant::now)
+                    .elapsed();
+
+                if elapsed >= std::time::Duration::from_secs(1) {
+                    if let Err(e) = self.tabs[idx].editor.save_file() {
+                        tracing::error!("Failed to save file: {:?}", e);
+                    }
+                    self.last_edit_time = None;
                 } else {
                     ctx.request_repaint_after(std::time::Duration::from_millis(500));
                 }
+                return;
             }
-
-        if self.config.autosave
-            && let Some(idx) = self.active_tab_index {
-                let is_dirty_and_has_path = self
-                    .tabs
-                    .get(idx)
-                    .map(|tab| tab.editor.is_dirty && tab.editor.active_path.is_some())
-                    .unwrap_or(false);
-
-                if is_dirty_and_has_path {
-                    let current_version = self.tabs[idx].editor.version;
-                    if self.last_editor_version != current_version {
-                        self.last_editor_version = current_version;
-                        self.last_edit_time = Some(std::time::Instant::now());
-                    }
-
-                    let elapsed = self
-                        .last_edit_time
-                        .get_or_insert_with(std::time::Instant::now)
-                        .elapsed();
-
-                    if elapsed >= std::time::Duration::from_secs(1) {
-                        if let Err(e) = self.tabs[idx].editor.save_file() {
-                            tracing::error!("Failed to save file: {:?}", e);
-                        }
-                        self.last_edit_time = None;
-                    } else {
-                        ctx.request_repaint_after(std::time::Duration::from_millis(500));
-                    }
-                    return;
-                }
-            }
+        }
         self.last_edit_time = None;
         if let Some(tab) = self.active_tab() {
             self.last_editor_version = tab.editor.version;

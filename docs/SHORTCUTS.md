@@ -36,7 +36,9 @@ The app uses the platform command modifier, so `Ctrl` on Linux and Windows maps 
 
 ## Navigation
 
-- `Ctrl+P` - Quick open / search files in explorer
+- `Ctrl+P` - Unified search (searches filenames and note contents across the vault)
+- `Ctrl+Shift+F` - Unified search (alias)
+- `Ctrl+F` - Find in active note
 - `Ctrl+Tab` - Switch to next tab
 - `Ctrl+Shift+Tab` - Switch to previous tab
 - `Alt+Left` - Switch to previous tab

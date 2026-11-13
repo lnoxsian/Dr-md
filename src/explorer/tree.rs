@@ -56,6 +56,7 @@ impl FileTree {
         }
     }
 
+    #[allow(dead_code)]
     pub fn toggle_search(&mut self) {
         self.search_visible = !self.search_visible;
         if self.search_visible {
@@ -120,7 +121,10 @@ impl FileTree {
                         let matches_path = if matches_name {
                             true
                         } else {
-                            rel_path.to_string_lossy().to_lowercase().contains(query_lower)
+                            rel_path
+                                .to_string_lossy()
+                                .to_lowercase()
+                                .contains(query_lower)
                         };
                         if matches_path {
                             let parent_dir = rel_path
@@ -238,10 +242,8 @@ impl FileTree {
                                         ui.visuals().text_color()
                                     };
 
-                                    let mut child_ui = ui.child_ui(
-                                        rect.shrink2(egui::vec2(4.0, 1.0)),
-                                        *ui.layout(),
-                                    );
+                                    let mut child_ui = ui
+                                        .child_ui(rect.shrink2(egui::vec2(4.0, 1.0)), *ui.layout());
                                     child_ui.add(
                                         egui::Label::new(
                                             egui::RichText::new(label_text).color(text_color),
@@ -294,22 +296,23 @@ impl FileTree {
             {
                 if pointer.is_decidedly_dragging()
                     && let Some(press_origin) = pointer.press_origin()
-                        && ui.clip_rect().contains(press_origin) {
-                            let latest_pos = pointer.latest_pos().unwrap_or(press_origin);
-                            let selection_rect = egui::Rect::from_two_pos(press_origin, latest_pos);
+                    && ui.clip_rect().contains(press_origin)
+                {
+                    let latest_pos = pointer.latest_pos().unwrap_or(press_origin);
+                    let selection_rect = egui::Rect::from_two_pos(press_origin, latest_pos);
 
-                            if self.drag_select_rect.is_none() {
-                                let ctrl_pressed = ui.input(|i| i.modifiers.command);
-                                if ctrl_pressed {
-                                    self.initial_selected_items = self.selected_items.clone();
-                                } else {
-                                    self.initial_selected_items.clear();
-                                }
-                            }
-
-                            self.drag_select_rect = Some(selection_rect);
-                            self.selected_items = self.initial_selected_items.clone();
+                    if self.drag_select_rect.is_none() {
+                        let ctrl_pressed = ui.input(|i| i.modifiers.command);
+                        if ctrl_pressed {
+                            self.initial_selected_items = self.selected_items.clone();
+                        } else {
+                            self.initial_selected_items.clear();
                         }
+                    }
+
+                    self.drag_select_rect = Some(selection_rect);
+                    self.selected_items = self.initial_selected_items.clone();
+                }
             } else {
                 self.drag_select_rect = None;
             }
@@ -326,15 +329,14 @@ impl FileTree {
                     self.selected_folder = None;
                 }
 
-                if response.hovered()
-                    && ui.input(|i| i.pointer.any_released()) {
-                        let dragged = std::mem::take(&mut self.dragged_items);
-                        let valid_dragged: Vec<_> =
-                            dragged.into_iter().filter(|src| src != root).collect();
-                        if !valid_dragged.is_empty() {
-                            self.move_items(&valid_dragged, root, active_file);
-                        }
+                if response.hovered() && ui.input(|i| i.pointer.any_released()) {
+                    let dragged = std::mem::take(&mut self.dragged_items);
+                    let valid_dragged: Vec<_> =
+                        dragged.into_iter().filter(|src| src != root).collect();
+                    if !valid_dragged.is_empty() {
+                        self.move_items(&valid_dragged, root, active_file);
                     }
+                }
 
                 response.context_menu(|ui| {
                     if ui.button("New File").clicked() {
@@ -389,8 +391,12 @@ impl FileTree {
             if let Some(rect) = self.drag_select_rect {
                 let fill_color = ui.visuals().selection.bg_fill.linear_multiply(0.15);
                 let stroke_color = ui.visuals().selection.bg_fill;
-                ui.painter()
-                    .rect(rect, 0.0, fill_color, egui::Stroke::new(1.0_f32, stroke_color));
+                ui.painter().rect(
+                    rect,
+                    0.0,
+                    fill_color,
+                    egui::Stroke::new(1.0_f32, stroke_color),
+                );
                 ui.ctx().request_repaint();
             }
         });
@@ -495,9 +501,10 @@ impl FileTree {
         if let Some(creating) = &self.creating_type {
             match creating {
                 CreatingType::File { parent_dir } | CreatingType::Folder { parent_dir }
-                    if parent_dir == &entry_path => {
-                        ui.data_mut(|d| d.insert_temp(id, true));
-                    }
+                    if parent_dir == &entry_path =>
+                {
+                    ui.data_mut(|d| d.insert_temp(id, true));
+                }
                 _ => {}
             }
         }
@@ -550,16 +557,18 @@ impl FileTree {
         );
 
         if let Some(press_origin) = ui.input(|i| i.pointer.press_origin())
-            && header_response.rect.contains(press_origin) {
-                self.drag_started_on_item = true;
-            }
+            && header_response.rect.contains(press_origin)
+        {
+            self.drag_started_on_item = true;
+        }
 
         // Check marquee selection intersection
         if let Some(select_rect) = self.drag_select_rect
-            && select_rect.intersects(header_response.rect) {
-                self.selected_items.insert(entry_path.clone());
-                self.selected_folder = Some(entry_path.clone());
-            }
+            && select_rect.intersects(header_response.rect)
+        {
+            self.selected_items.insert(entry_path.clone());
+            self.selected_folder = Some(entry_path.clone());
+        }
 
         if header_response.drag_started() {
             if self.selected_items.contains(&entry_path) {
@@ -636,15 +645,17 @@ impl FileTree {
         let label_response = ui.interact(label.rect, label.id, egui::Sense::click_and_drag());
 
         if let Some(press_origin) = ui.input(|i| i.pointer.press_origin())
-            && label_response.rect.contains(press_origin) {
-                self.drag_started_on_item = true;
-            }
+            && label_response.rect.contains(press_origin)
+        {
+            self.drag_started_on_item = true;
+        }
 
         // Check marquee selection intersection
         if let Some(select_rect) = self.drag_select_rect
-            && select_rect.intersects(label_response.rect) {
-                self.selected_items.insert(entry_path.clone());
-            }
+            && select_rect.intersects(label_response.rect)
+        {
+            self.selected_items.insert(entry_path.clone());
+        }
 
         if label_response.drag_started() {
             if self.selected_items.contains(&entry_path) {
@@ -779,11 +790,10 @@ impl FileTree {
     ) {
         let multi_count = self.selected_items.len();
 
-        if multi_count <= 1
-            && ui.button("Rename").clicked() {
-                self.start_rename(entry_path.to_path_buf());
-                ui.close_menu();
-            }
+        if multi_count <= 1 && ui.button("Rename").clicked() {
+            self.start_rename(entry_path.to_path_buf());
+            ui.close_menu();
+        }
 
         let cut_label = if multi_count > 1 {
             format!("Cut {} items", multi_count)
@@ -877,9 +887,10 @@ impl FileTree {
                                         if *active == src_path {
                                             *active = unique_dest;
                                         } else if active.starts_with(&src_path)
-                                            && let Ok(relative) = active.strip_prefix(&src_path) {
-                                                *active = unique_dest.join(relative);
-                                            }
+                                            && let Ok(relative) = active.strip_prefix(&src_path)
+                                        {
+                                            *active = unique_dest.join(relative);
+                                        }
                                     }
                                 }
                             }
@@ -938,11 +949,13 @@ impl FileTree {
 
         if let Some(pos) = file_stem.rfind('_') {
             let suffix = &file_stem[pos + 1..];
-            if !suffix.is_empty() && suffix.chars().all(|c| c.is_ascii_digit())
-                && let Ok(num) = suffix.parse::<usize>() {
-                    base_stem = file_stem[..pos].to_string();
-                    counter = num + 1;
-                }
+            if !suffix.is_empty()
+                && suffix.chars().all(|c| c.is_ascii_digit())
+                && let Ok(num) = suffix.parse::<usize>()
+            {
+                base_stem = file_stem[..pos].to_string();
+                counter = num + 1;
+            }
         }
 
         loop {
@@ -999,9 +1012,10 @@ impl FileTree {
                         if *active == *src {
                             *active = unique_target;
                         } else if active.starts_with(src)
-                            && let Ok(relative) = active.strip_prefix(src) {
-                                *active = unique_target.join(relative);
-                            }
+                            && let Ok(relative) = active.strip_prefix(src)
+                        {
+                            *active = unique_target.join(relative);
+                        }
                     }
                 }
             }
@@ -1049,9 +1063,10 @@ impl FileTree {
                 tracing::error!("Failed to delete item: {:?}", e);
             } else {
                 if let Some(active) = active_file
-                    && (active == path || active.starts_with(path)) {
-                        *active_file = None;
-                    }
+                    && (active == path || active.starts_with(path))
+                {
+                    *active_file = None;
+                }
             }
         }
     }

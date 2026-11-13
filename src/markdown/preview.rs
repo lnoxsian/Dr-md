@@ -14,6 +14,7 @@ pub struct MarkdownPreview {
     pub cache: CommonMarkCache,
     pub cached_content: String,
     pub processed_content: String,
+    pub line_map: Vec<Option<usize>>,
     pub last_version: usize,
     pub last_path: Option<std::path::PathBuf>,
     pub last_content_height: f32,
@@ -29,6 +30,7 @@ impl MarkdownPreview {
             cache: CommonMarkCache::default(),
             cached_content: String::new(),
             processed_content: String::new(),
+            line_map: Vec::new(),
             last_version: usize::MAX,
             last_path: None,
             last_content_height: 0.0,
@@ -46,14 +48,13 @@ impl MarkdownPreview {
         editor: &mut Editor,
         editor_renderer: &mut EditorRenderer,
         tab_path: &std::path::Path,
+        vault_root: Option<&std::path::Path>,
         font_size: f32,
         theme: &str,
         mirror_mode: bool,
         is_preview_mode: bool,
         preview_max_width: f32,
     ) {
-
-
         if let Some((uri, bytes)) = self.cache.zoomed_image_request.take() {
             self.active_zoom = Some(ZoomModalState {
                 uri,
@@ -73,7 +74,16 @@ impl MarkdownPreview {
                 self.active_zoom = None;
             }
             self.cached_content = editor.buffer.to_string();
-            self.processed_content = super::parser::preprocess_wiki_links(&self.cached_content);
+            let mut call_stack = Vec::new();
+            let pre = super::wikilink::preprocess_markdown_with_embeds(
+                &self.cached_content,
+                Some(tab_path),
+                vault_root,
+                &mut call_stack,
+                0,
+            );
+            self.processed_content = pre.text;
+            self.line_map = pre.line_map;
             self.last_version = editor.version;
             self.last_path = Some(tab_path.to_path_buf());
         }
@@ -159,8 +169,7 @@ impl MarkdownPreview {
                         _ => {}
                     }
 
-                    let content_target =
-                        processed.as_mut().unwrap_or(&mut self.processed_content);
+                    let content_target = processed.as_mut().unwrap_or(&mut self.processed_content);
                     viewer.show_mut(ui, &mut self.cache, content_target);
 
                     // Highlight matching search keywords inside the preview pane
@@ -217,9 +226,6 @@ impl MarkdownPreview {
                             );
                         }
                     }
-
-                    // Add bottom padding inside scroll viewport
-                    ui.add_space(100.0);
                 });
         });
 
@@ -235,7 +241,7 @@ impl MarkdownPreview {
             let mut orig_lines: Vec<String> =
                 self.cached_content.lines().map(|s| s.to_string()).collect();
 
-            if old_lines.len() == new_lines.len() && old_lines.len() == orig_lines.len() {
+            if old_lines.len() == new_lines.len() {
                 for i in 0..old_lines.len() {
                     if old_lines[i] != new_lines[i] {
                         let old_trimmed = old_lines[i].trim_start();
@@ -251,57 +257,68 @@ impl MarkdownPreview {
                                 && new_trimmed.starts_with("* [ ]"));
 
                         if is_toggle {
-                            if let Some(pos) = orig_lines[i].find("- [") {
-                                let current_char = orig_lines[i]
-                                    .as_bytes()
-                                    .get(pos + 3)
-                                    .copied()
-                                    .unwrap_or(b' ');
-                                let new_char = if current_char == b'x' { ' ' } else { 'x' };
-                                let mut orig_chars: Vec<char> = orig_lines[i].chars().collect();
-                                let mut char_pos = 0;
-                                for (c_idx, _) in orig_lines[i].char_indices() {
-                                    if c_idx == pos + 3 {
-                                        break;
+                            let orig_idx = self.line_map.get(i).copied().flatten().unwrap_or(i);
+                            if orig_idx < orig_lines.len() {
+                                if let Some(pos) = orig_lines[orig_idx].find("- [") {
+                                    let current_char = orig_lines[orig_idx]
+                                        .as_bytes()
+                                        .get(pos + 3)
+                                        .copied()
+                                        .unwrap_or(b' ');
+                                    let new_char = if current_char == b'x' { ' ' } else { 'x' };
+                                    let mut orig_chars: Vec<char> =
+                                        orig_lines[orig_idx].chars().collect();
+                                    let mut char_pos = 0;
+                                    for (c_idx, _) in orig_lines[orig_idx].char_indices() {
+                                        if c_idx == pos + 3 {
+                                            break;
+                                        }
+                                        char_pos += 1;
                                     }
-                                    char_pos += 1;
-                                }
-                                if char_pos < orig_chars.len() {
-                                    orig_chars[char_pos] = new_char;
-                                    orig_lines[i] = orig_chars.into_iter().collect();
-                                }
-                            } else if let Some(pos) = orig_lines[i].find("* [") {
-                                let current_char = orig_lines[i]
-                                    .as_bytes()
-                                    .get(pos + 3)
-                                    .copied()
-                                    .unwrap_or(b' ');
-                                let new_char = if current_char == b'x' { ' ' } else { 'x' };
-                                let mut orig_chars: Vec<char> = orig_lines[i].chars().collect();
-                                let mut char_pos = 0;
-                                for (c_idx, _) in orig_lines[i].char_indices() {
-                                    if c_idx == pos + 3 {
-                                        break;
+                                    if char_pos < orig_chars.len() {
+                                        orig_chars[char_pos] = new_char;
+                                        orig_lines[orig_idx] = orig_chars.into_iter().collect();
                                     }
-                                    char_pos += 1;
-                                }
-                                if char_pos < orig_chars.len() {
-                                    orig_chars[char_pos] = new_char;
-                                    orig_lines[i] = orig_chars.into_iter().collect();
+                                } else if let Some(pos) = orig_lines[orig_idx].find("* [") {
+                                    let current_char = orig_lines[orig_idx]
+                                        .as_bytes()
+                                        .get(pos + 3)
+                                        .copied()
+                                        .unwrap_or(b' ');
+                                    let new_char = if current_char == b'x' { ' ' } else { 'x' };
+                                    let mut orig_chars: Vec<char> =
+                                        orig_lines[orig_idx].chars().collect();
+                                    let mut char_pos = 0;
+                                    for (c_idx, _) in orig_lines[orig_idx].char_indices() {
+                                        if c_idx == pos + 3 {
+                                            break;
+                                        }
+                                        char_pos += 1;
+                                    }
+                                    if char_pos < orig_chars.len() {
+                                        orig_chars[char_pos] = new_char;
+                                        orig_lines[orig_idx] = orig_chars.into_iter().collect();
+                                    }
                                 }
                             }
                         }
                     }
                 }
                 self.cached_content = orig_lines.join("\n");
-                self.processed_content =
-                    super::parser::preprocess_wiki_links(&self.cached_content);
+                let mut call_stack = Vec::new();
+                let pre = super::wikilink::preprocess_markdown_with_embeds(
+                    &self.cached_content,
+                    Some(tab_path),
+                    vault_root,
+                    &mut call_stack,
+                    0,
+                );
+                self.processed_content = pre.text;
+                self.line_map = pre.line_map;
                 editor.set_text(&self.cached_content);
                 self.last_version = editor.version;
             }
         }
-
-
 
         if let Some(zoom_state) = &mut self.active_zoom {
             let mut close = false;
@@ -325,10 +342,8 @@ impl MarkdownPreview {
                 .order(egui::Order::Foreground)
                 .fixed_pos(pane_rect.min)
                 .show(ui.ctx(), |ui| {
-                    let mut content_ui = ui.child_ui(
-                        pane_rect,
-                        egui::Layout::top_down(egui::Align::Min),
-                    );
+                    let mut content_ui =
+                        ui.child_ui(pane_rect, egui::Layout::top_down(egui::Align::Min));
                     content_ui.set_clip_rect(pane_rect);
 
                     egui::Frame::none()
@@ -349,9 +364,9 @@ impl MarkdownPreview {
                                     ui.add(img);
                                 });
 
-                            let (primary_down, pointer_delta) = ui.ctx().input(|i| {
-                                (i.pointer.primary_down(), i.pointer.delta())
-                            });
+                            let (primary_down, pointer_delta) = ui
+                                .ctx()
+                                .input(|i| (i.pointer.primary_down(), i.pointer.delta()));
 
                             if primary_down && pointer_delta != egui::Vec2::ZERO {
                                 zoom_state.scroll_pos -= pointer_delta;
@@ -373,8 +388,6 @@ impl MarkdownPreview {
             }
         }
     }
-
-
 }
 
 #[cfg(test)]
@@ -403,6 +416,7 @@ mod tests {
                     &mut editor,
                     &mut renderer,
                     std::path::Path::new("test.md"),
+                    None,
                     14.0,
                     "dark",
                     false,

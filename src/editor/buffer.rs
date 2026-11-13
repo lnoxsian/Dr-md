@@ -30,7 +30,6 @@ impl EditBuffer {
         Ok(())
     }
 
-
     pub fn len_chars(&self) -> usize {
         self.rope.len_chars()
     }

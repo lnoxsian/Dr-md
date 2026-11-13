@@ -31,8 +31,8 @@ use egui::{self, text::LayoutJob, Id, RichText, TextStyle, Ui};
 
 mod alerts;
 mod elements;
-mod parsers;
 mod mermaid;
+mod parsers;
 
 pub use alerts::*;
 
@@ -74,7 +74,8 @@ pub struct CommonMarkCache {
     #[cfg(feature = "pulldown_cmark")]
     scroll: HashMap<Id, ScrollableCache>,
     has_installed_loaders: bool,
-    pub(crate) mermaid_cache: std::sync::Arc<std::sync::Mutex<HashMap<u64, crate::mermaid::MermaidCacheEntry>>>,
+    pub(crate) mermaid_cache:
+        std::sync::Arc<std::sync::Mutex<HashMap<u64, crate::mermaid::MermaidCacheEntry>>>,
     pub(crate) math_cache: HashMap<u64, Vec<u8>>,
     pub(crate) syntax_cache: HashMap<u64, egui::text::LayoutJob>,
     pub zoomed_image_request: Option<(String, std::sync::Arc<[u8]>)>,
@@ -123,7 +124,9 @@ impl CommonMarkCache {
         &mut self,
         path: impl AsRef<std::path::Path>,
     ) -> Result<(), syntect::LoadingError> {
-        let mut ts = ThemeSet { themes: self.ts.themes.clone() };
+        let mut ts = ThemeSet {
+            themes: self.ts.themes.clone(),
+        };
         ts.add_from_folder(path)?;
         self.ts = std::sync::Arc::new(ts);
         Ok(())
@@ -140,7 +143,9 @@ impl CommonMarkCache {
     ) -> Result<(), syntect::LoadingError> {
         let mut cursor = std::io::Cursor::new(bytes);
         let theme = ThemeSet::load_from_reader(&mut cursor)?;
-        let mut ts = ThemeSet { themes: self.ts.themes.clone() };
+        let mut ts = ThemeSet {
+            themes: self.ts.themes.clone(),
+        };
         ts.themes.insert(name.into(), theme);
         self.ts = std::sync::Arc::new(ts);
         Ok(())
@@ -652,7 +657,9 @@ impl FencedCodeBlock {
         max_width: f32,
     ) {
         if self.lang == "mermaid" {
-            if let Err(err) = crate::mermaid::render_mermaid(ui, cache, &self.content, options.max_width(ui)) {
+            if let Err(err) =
+                crate::mermaid::render_mermaid(ui, cache, &self.content, options.max_width(ui))
+            {
                 // Show a warning/error label, then fall back to standard code block rendering
                 ui.colored_label(
                     egui::Color32::RED,
@@ -671,11 +678,17 @@ impl FencedCodeBlock {
             #[cfg(not(feature = "better_syntax_highlighting"))]
             let curr_theme_name = "";
             let dark_mode = ui.visuals().dark_mode;
-            let font_size = ui.style().text_styles.get(&TextStyle::Monospace).map_or(14.0, |d| d.size);
+            let font_size = ui
+                .style()
+                .text_styles
+                .get(&TextStyle::Monospace)
+                .map_or(14.0, |d| d.size);
+
+            let content = self.content.trim_end_matches(['\r', '\n']);
 
             let mut hasher = std::collections::hash_map::DefaultHasher::new();
             use std::hash::{Hash, Hasher};
-            self.content.hash(&mut hasher);
+            content.hash(&mut hasher);
             self.lang.hash(&mut hasher);
             curr_theme_name.hash(&mut hasher);
             dark_mode.hash(&mut hasher);
@@ -689,7 +702,7 @@ impl FencedCodeBlock {
             let cached_job = if let Some(job) = cache.syntax_cache.get(&hash) {
                 job.clone()
             } else {
-                let job = self.syntax_highlighting(cache, options, &self.lang, ui, &self.content);
+                let job = self.syntax_highlighting(cache, options, &self.lang, ui, content);
                 cache.syntax_cache.insert(hash, job.clone());
                 job
             };
@@ -701,7 +714,7 @@ impl FencedCodeBlock {
                 ui.fonts(|f| f.layout_job(job))
             };
 
-            elements::code_block(ui, max_width, &self.content, &mut layout);
+            elements::code_block(ui, max_width, content, &mut layout);
         });
     }
 }

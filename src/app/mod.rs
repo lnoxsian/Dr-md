@@ -24,6 +24,10 @@ impl DoctorMarkdownApp {
 }
 impl eframe::App for DoctorMarkdownApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.state
+            .search_controller
+            .update(ctx, self.state.vault.root_path.as_deref());
+
         if let Some(action) = handle_key_events(ctx) {
             self.state.sync_cursor_from_egui(ctx);
             match action {
@@ -92,15 +96,15 @@ impl eframe::App for DoctorMarkdownApp {
                     if let Some(tab) = self.state.active_tab()
                         && let Some(mut text_state) =
                             egui::widgets::text_edit::TextEditState::load(ctx, editor_id)
-                        {
-                            let len = tab.editor.buffer.len_chars();
-                            let anchor = egui::text::CCursor::new(0);
-                            let head = egui::text::CCursor::new(len);
-                            text_state
-                                .cursor
-                                .set_char_range(Some(egui::text::CCursorRange::two(anchor, head)));
-                            text_state.store(ctx, editor_id);
-                        }
+                    {
+                        let len = tab.editor.buffer.len_chars();
+                        let anchor = egui::text::CCursor::new(0);
+                        let head = egui::text::CCursor::new(len);
+                        text_state
+                            .cursor
+                            .set_char_range(Some(egui::text::CCursorRange::two(anchor, head)));
+                        text_state.store(ctx, editor_id);
+                    }
                 }
                 ShortcutAction::ViewSplit => {
                     if let Some(tab) = self.state.active_tab_mut() {
@@ -162,31 +166,33 @@ impl eframe::App for DoctorMarkdownApp {
                 }
                 ShortcutAction::NextTab => {
                     if !self.state.tabs.is_empty()
-                        && let Some(idx) = self.state.active_tab_index {
-                            let next_idx = (idx + 1) % self.state.tabs.len();
-                            self.state.switch_tab(next_idx);
-                            ctx.memory_mut(|mem| {
-                                if let Some(id) = mem.focused() {
-                                    mem.surrender_focus(id);
-                                }
-                            });
-                        }
+                        && let Some(idx) = self.state.active_tab_index
+                    {
+                        let next_idx = (idx + 1) % self.state.tabs.len();
+                        self.state.switch_tab(next_idx);
+                        ctx.memory_mut(|mem| {
+                            if let Some(id) = mem.focused() {
+                                mem.surrender_focus(id);
+                            }
+                        });
+                    }
                 }
                 ShortcutAction::PrevTab => {
                     if !self.state.tabs.is_empty()
-                        && let Some(idx) = self.state.active_tab_index {
-                            let prev_idx = if idx == 0 {
-                                self.state.tabs.len() - 1
-                            } else {
-                                idx - 1
-                            };
-                            self.state.switch_tab(prev_idx);
-                            ctx.memory_mut(|mem| {
-                                if let Some(id) = mem.focused() {
-                                    mem.surrender_focus(id);
-                                }
-                            });
-                        }
+                        && let Some(idx) = self.state.active_tab_index
+                    {
+                        let prev_idx = if idx == 0 {
+                            self.state.tabs.len() - 1
+                        } else {
+                            idx - 1
+                        };
+                        self.state.switch_tab(prev_idx);
+                        ctx.memory_mut(|mem| {
+                            if let Some(id) = mem.focused() {
+                                mem.surrender_focus(id);
+                            }
+                        });
+                    }
                 }
                 ShortcutAction::SearchInFile => {
                     if let Some(tab) = self.state.active_tab_mut() {
@@ -195,11 +201,14 @@ impl eframe::App for DoctorMarkdownApp {
                         tab.editor_renderer.update_find_matches();
                     }
                 }
-                ShortcutAction::QuickOpen => {
+                ShortcutAction::QuickOpen | ShortcutAction::SearchInVault => {
                     self.state.explorer_visible = true;
-                    self.state.explorer.toggle_search();
+                    self.state.search_active = !self.state.search_active;
+                    if self.state.search_active {
+                        self.state.search_controller.focus_input = true;
+                    }
                 }
-                ShortcutAction::SearchInVault | ShortcutAction::GoToLine => {
+                ShortcutAction::GoToLine => {
                     if let Some(tab) = self.state.active_tab_mut() {
                         tab.editor_renderer.find_visible = true;
                         tab.editor_renderer.focus_search_input = true;
@@ -208,31 +217,33 @@ impl eframe::App for DoctorMarkdownApp {
                 }
                 ShortcutAction::Back => {
                     if !self.state.tabs.is_empty()
-                        && let Some(idx) = self.state.active_tab_index {
-                            let prev_idx = if idx == 0 {
-                                self.state.tabs.len() - 1
-                            } else {
-                                idx - 1
-                            };
-                            self.state.switch_tab(prev_idx);
-                            ctx.memory_mut(|mem| {
-                                if let Some(id) = mem.focused() {
-                                    mem.surrender_focus(id);
-                                }
-                            });
-                        }
+                        && let Some(idx) = self.state.active_tab_index
+                    {
+                        let prev_idx = if idx == 0 {
+                            self.state.tabs.len() - 1
+                        } else {
+                            idx - 1
+                        };
+                        self.state.switch_tab(prev_idx);
+                        ctx.memory_mut(|mem| {
+                            if let Some(id) = mem.focused() {
+                                mem.surrender_focus(id);
+                            }
+                        });
+                    }
                 }
                 ShortcutAction::Forward => {
                     if !self.state.tabs.is_empty()
-                        && let Some(idx) = self.state.active_tab_index {
-                            let next_idx = (idx + 1) % self.state.tabs.len();
-                            self.state.switch_tab(next_idx);
-                            ctx.memory_mut(|mem| {
-                                if let Some(id) = mem.focused() {
-                                    mem.surrender_focus(id);
-                                }
-                            });
-                        }
+                        && let Some(idx) = self.state.active_tab_index
+                    {
+                        let next_idx = (idx + 1) % self.state.tabs.len();
+                        self.state.switch_tab(next_idx);
+                        ctx.memory_mut(|mem| {
+                            if let Some(id) = mem.focused() {
+                                mem.surrender_focus(id);
+                            }
+                        });
+                    }
                 }
             }
         }
@@ -240,11 +251,12 @@ impl eframe::App for DoctorMarkdownApp {
         let mut request_dialog = false;
         let mut cursor_pos = None;
         if let Some(tab) = self.state.active_tab_mut()
-            && tab.editor.request_table_dialog {
-                tab.editor.request_table_dialog = false;
-                request_dialog = true;
-                cursor_pos = tab.editor.cursor_screen_pos;
-            }
+            && tab.editor.request_table_dialog
+        {
+            tab.editor.request_table_dialog = false;
+            request_dialog = true;
+            cursor_pos = tab.editor.cursor_screen_pos;
+        }
         if request_dialog {
             self.state.insert_table_dialog_open = true;
             self.state.insert_table_dialog_pos =
@@ -295,9 +307,10 @@ impl eframe::App for DoctorMarkdownApp {
                 let rect = response.response.rect;
                 if ctx.input(|i| i.pointer.button_clicked(egui::PointerButton::Primary))
                     && let Some(click_pos) = ctx.input(|i| i.pointer.interact_pos())
-                        && !rect.contains(click_pos) {
-                            close_dialog = true;
-                        }
+                    && !rect.contains(click_pos)
+                {
+                    close_dialog = true;
+                }
             }
 
             if close_dialog {
@@ -336,7 +349,7 @@ impl eframe::App for DoctorMarkdownApp {
 
         if let Some(open_url) = ctx.output_mut(|o| o.open_url.take()) {
             let url_str = open_url.url.as_str();
-            
+
             let (path_part, anchor_part) = if let Some(idx) = url_str.find('#') {
                 (&url_str[..idx], Some(&url_str[idx + 1..]))
             } else {
@@ -346,78 +359,121 @@ impl eframe::App for DoctorMarkdownApp {
             if path_part.is_empty() {
                 // Current file anchor link
                 if let Some(anchor) = anchor_part
-                    && let Some(tab) = self.state.active_tab_mut() {
-                        let doc_text = tab.editor.buffer.to_string();
-                        if let Some(line_idx) = find_heading_line(&doc_text, anchor) {
-                            // 1. Move editor cursor to this line
-                            let char_idx = tab.editor.buffer.rope.line_to_char(line_idx);
-                            tab.editor.cursor.char_idx = char_idx;
-                            tab.editor.selection.anchor = char_idx;
-                            tab.editor.selection.head = char_idx;
+                    && let Some(tab) = self.state.active_tab_mut()
+                {
+                    let doc_text = tab.editor.buffer.to_string();
+                    let line_idx = if anchor.starts_with('^') {
+                        crate::markdown::wikilink::find_block_line(&doc_text, anchor)
+                    } else {
+                        crate::markdown::wikilink::find_heading_line(&doc_text, anchor)
+                    };
 
-                            // 2. Set scroll target for the preview
-                            let total_lines = tab.editor.buffer.rope.len_lines();
-                            let ratio = if total_lines > 1 {
-                                line_idx as f32 / (total_lines - 1) as f32
-                            } else {
-                                0.0
-                            };
-                            let max_scroll = (self.state.preview.last_content_height - self.state.preview.last_viewport_height).max(0.0);
-                            let target_y = ratio * self.state.preview.last_content_height;
-                            let target_offset = (target_y - self.state.preview.last_viewport_height / 2.0).clamp(0.0, max_scroll);
-                            self.state.preview.scroll_target_y = Some(target_offset);
-                        }
+                    if let Some(line_idx) = line_idx {
+                        let char_idx = tab.editor.buffer.rope.line_to_char(line_idx);
+                        tab.editor.cursor.char_idx = char_idx;
+                        tab.editor.selection.anchor = char_idx;
+                        tab.editor.selection.head = char_idx;
+
+                        let total_lines = tab.editor.buffer.rope.len_lines();
+                        let ratio = if total_lines > 1 {
+                            line_idx as f32 / (total_lines - 1) as f32
+                        } else {
+                            0.0
+                        };
+                        let max_scroll = (self.state.preview.last_content_height
+                            - self.state.preview.last_viewport_height)
+                            .max(0.0);
+                        let target_y = ratio * self.state.preview.last_content_height;
+                        let target_offset = (target_y
+                            - self.state.preview.last_viewport_height / 2.0)
+                            .clamp(0.0, max_scroll);
+                        self.state.preview.scroll_target_y = Some(target_offset);
                     }
+                }
             } else if !path_part.starts_with("http://")
                 && !path_part.starts_with("https://")
                 && !path_part.starts_with("mailto:")
             {
-                let mut target_path = resolve_link_path(
+                let resolved = crate::markdown::wikilink::resolve_wikilink_target(
                     path_part,
                     self.state.vault.active_file.as_deref(),
                     self.state.vault.root_path.as_deref(),
                 );
 
-                // If the path doesn't end with .md and doesn't exist, we append the .md extension.
-                let target_path_str = target_path.to_string_lossy();
-                if !target_path.is_dir()
-                    && !target_path_str.ends_with(".md")
-                    && !target_path.exists()
-                {
-                    target_path = target_path.with_extension("md");
-                }
+                match resolved {
+                    crate::markdown::wikilink::ResolvedLinkTarget::CurrentDocument => {}
+                    crate::markdown::wikilink::ResolvedLinkTarget::Directory { path, .. } => {
+                        commands::execute_open_folder(&mut self.state, path);
+                    }
+                    crate::markdown::wikilink::ResolvedLinkTarget::MarkdownFile {
+                        path,
+                        exists,
+                    } => {
+                        if exists {
+                            commands::execute_open_file(&mut self.state, path.clone());
+                        } else {
+                            // Note does not exist: create note in vault and open!
+                            if let Some(parent) = path.parent() {
+                                let _ = std::fs::create_dir_all(parent);
+                            }
+                            if std::fs::write(&path, "").is_ok() {
+                                commands::execute_open_file(&mut self.state, path.clone());
+                            } else {
+                                tracing::warn!("Failed to create unresolved note: {:?}", path);
+                            }
+                        }
 
-                if target_path.is_dir() {
-                    commands::execute_open_folder(&mut self.state, target_path);
-                } else if target_path.exists() && target_path.is_file() {
-                    commands::execute_open_file(&mut self.state, target_path.clone());
-                    
-                    // If there was an anchor, jump to it in the newly opened file!
-                    if let Some(anchor) = anchor_part
-                        && let Some(tab) = self.state.active_tab_mut() {
+                        // Jump to anchor in newly opened note if present
+                        if let Some(anchor) = anchor_part
+                            && let Some(tab) = self.state.active_tab_mut()
+                        {
                             let doc_text = tab.editor.buffer.to_string();
-                            if let Some(line_idx) = find_heading_line(&doc_text, anchor) {
-                                // 1. Move editor cursor to this line
+                            let line_idx = if anchor.starts_with('^') {
+                                crate::markdown::wikilink::find_block_line(&doc_text, anchor)
+                            } else {
+                                crate::markdown::wikilink::find_heading_line(&doc_text, anchor)
+                            };
+
+                            if let Some(line_idx) = line_idx {
                                 let char_idx = tab.editor.buffer.rope.line_to_char(line_idx);
                                 tab.editor.cursor.char_idx = char_idx;
                                 tab.editor.selection.anchor = char_idx;
                                 tab.editor.selection.head = char_idx;
 
-                                // 2. Set scroll target for the preview
                                 let total_lines = tab.editor.buffer.rope.len_lines();
                                 let ratio = if total_lines > 1 {
                                     line_idx as f32 / (total_lines - 1) as f32
                                 } else {
                                     0.0
                                 };
-                                let max_scroll = (self.state.preview.last_content_height - self.state.preview.last_viewport_height).max(0.0);
+                                let max_scroll = (self.state.preview.last_content_height
+                                    - self.state.preview.last_viewport_height)
+                                    .max(0.0);
                                 let target_y = ratio * self.state.preview.last_content_height;
-                                let target_offset = (target_y - self.state.preview.last_viewport_height / 2.0).clamp(0.0, max_scroll);
+                                let target_offset = (target_y
+                                    - self.state.preview.last_viewport_height / 2.0)
+                                    .clamp(0.0, max_scroll);
                                 self.state.preview.scroll_target_y = Some(target_offset);
                             }
                         }
-                } else {
-                    tracing::warn!("Linked path does not exist: {:?}", target_path);
+                    }
+                    crate::markdown::wikilink::ResolvedLinkTarget::MediaOrFile {
+                        path,
+                        exists,
+                        ..
+                    } => {
+                        if exists {
+                            let file_url = format!("file://{}", path.to_string_lossy());
+                            ctx.output_mut(|o| {
+                                o.open_url = Some(egui::output::OpenUrl {
+                                    url: file_url,
+                                    new_tab: false,
+                                })
+                            });
+                        } else {
+                            tracing::warn!("Linked file does not exist: {:?}", path);
+                        }
+                    }
                 }
             } else {
                 ctx.output_mut(|o| o.open_url = Some(open_url));
@@ -436,6 +492,7 @@ impl eframe::App for DoctorMarkdownApp {
     }
 }
 
+#[allow(dead_code)]
 pub fn resolve_link_path(
     url_str: &str,
     active_file: Option<&std::path::Path>,
@@ -476,6 +533,7 @@ pub fn resolve_link_path(
     clean_path(&target_path)
 }
 
+#[allow(dead_code)]
 pub fn clean_path(path: &std::path::Path) -> std::path::PathBuf {
     use std::path::Component;
     let mut clean = std::path::PathBuf::new();
@@ -502,6 +560,7 @@ pub fn clean_path(path: &std::path::Path) -> std::path::PathBuf {
     clean
 }
 
+#[allow(dead_code)]
 pub fn slugify(text: &str) -> String {
     let mut slug = String::new();
     let mut last_was_hyphen = false;
@@ -509,11 +568,10 @@ pub fn slugify(text: &str) -> String {
         if c.is_alphanumeric() {
             slug.push(c.to_ascii_lowercase());
             last_was_hyphen = false;
-        } else if (c.is_whitespace() || c == '-' || c == '_')
-            && !last_was_hyphen {
-                slug.push('-');
-                last_was_hyphen = true;
-            }
+        } else if (c.is_whitespace() || c == '-' || c == '_') && !last_was_hyphen {
+            slug.push('-');
+            last_was_hyphen = true;
+        }
     }
     let mut trimmed = slug.as_str();
     while trimmed.starts_with('-') || trimmed.starts_with('_') {
@@ -525,21 +583,9 @@ pub fn slugify(text: &str) -> String {
     trimmed.to_string()
 }
 
+#[allow(dead_code)]
 pub fn find_heading_line(text: &str, anchor: &str) -> Option<usize> {
-    for (line_idx, line) in text.lines().enumerate() {
-        let trimmed = line.trim();
-        if trimmed.starts_with('#') {
-            let hash_count = trimmed.chars().take_while(|&c| c == '#').count();
-            let rest = &trimmed[hash_count..];
-            if rest.is_empty() || rest.chars().next().unwrap().is_whitespace() {
-                let heading_text = rest.trim();
-                if slugify(heading_text) == anchor {
-                    return Some(line_idx);
-                }
-            }
-        }
-    }
-    None
+    crate::markdown::wikilink::find_heading_line(text, anchor)
 }
 
 #[cfg(test)]
@@ -550,7 +596,10 @@ mod tests {
     #[test]
     fn test_slugify() {
         assert_eq!(slugify("Section Name"), "section-name");
-        assert_eq!(slugify("## My Cool Heading! (Extra)"), "my-cool-heading-extra");
+        assert_eq!(
+            slugify("## My Cool Heading! (Extra)"),
+            "my-cool-heading-extra"
+        );
         assert_eq!(slugify("**Bold** Heading"), "bold-heading");
     }
 
